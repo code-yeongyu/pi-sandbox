@@ -254,7 +254,16 @@ const SshAuthConfigSchema = z.discriminatedUnion("kind", [
 	z.object({ kind: z.literal("password"), password: z.string() }).strict(),
 	z.object({ kind: z.literal("agent"), sock: z.string().optional() }).strict(),
 	z.object({ kind: z.literal("kbi") }).strict(),
-	z.object({ kind: z.literal("hostbased") }).strict(),
+	z
+		.object({
+			kind: z.literal("hostbased"),
+			keyPath: z.string(),
+			localHostname: z.string(),
+			localUsername: z.string(),
+			passphrase: z.string().optional(),
+		})
+		.strict(),
+	z.object({ kind: z.literal("v1") }).strict(),
 ]);
 
 const SshHostVerificationConfigSchema = z

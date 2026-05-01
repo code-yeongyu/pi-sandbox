@@ -174,7 +174,17 @@ export const SshAuthConfigSchema = z.discriminatedUnion("kind", [
 		.strict()
 		.readonly(),
 	z
-		.object({ kind: z.literal("hostbased") })
+		.object({
+			kind: z.literal("hostbased"),
+			keyPath: z.string(),
+			localHostname: z.string(),
+			localUsername: z.string(),
+			passphrase: z.string().optional(),
+		})
+		.strict()
+		.readonly(),
+	z
+		.object({ kind: z.literal("v1") })
 		.strict()
 		.readonly(),
 ]);
