@@ -1,0 +1,67 @@
+{
+	"name": "pi-sandbox",
+	"version": "0.0.0",
+	"description": "Sandbox policy extension for pi-mono with native, Docker, justbash, QEMU, and SSH backends.",
+	"type": "module",
+	"license": "MIT",
+	"homepage": "https://github.com/code-yeongyu/pi-sandbox",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/code-yeongyu/pi-sandbox.git"
+	},
+	"keywords": [
+		"pi",
+		"pi-mono",
+		"pi-coding-agent",
+		"pi-extension",
+		"sandbox",
+		"docker",
+		"bwrap",
+		"seatbelt",
+		"qemu",
+		"ssh",
+		"just-bash",
+		"typescript"
+	],
+	"pi": {
+		"extensions": ["./src/index.ts"]
+	},
+	"files": ["src", "schema", "LICENSE", "NOTICE", "README.md", "CHANGELOG.md"],
+	"scripts": {
+		"test": "vitest run",
+		"test:watch": "vitest",
+		"test:integration": "vitest run test/integration --passWithNoTests",
+		"typecheck": "tsgo --noEmit",
+		"lint": "biome check .",
+		"lint:fix": "biome check --write .",
+		"lint:forbidden": "node scripts/check-forbidden-patterns.mjs",
+		"check": "npm run typecheck && npm run lint && npm run lint:forbidden",
+		"generate:schema": "node scripts/generate-schema.mjs"
+	},
+	"peerDependencies": {
+		"@mariozechner/pi-coding-agent": "*"
+	},
+	"dependencies": {
+		"dockerode": "latest",
+		"jsonc-parser": "latest",
+		"ssh2": "latest",
+		"zod": "latest"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "2.4.12",
+		"@types/dockerode": "latest",
+		"@types/node": "latest",
+		"@types/ssh2": "latest",
+		"@typescript/native-preview": "latest",
+		"expect-type": "latest",
+		"typescript": "^5.9.0",
+		"vitest": "^4.0.0",
+		"zod-to-json-schema": "latest"
+	},
+	"engines": {
+		"node": ">=20"
+	},
+	"publishConfig": {
+		"access": "public"
+	}
+}

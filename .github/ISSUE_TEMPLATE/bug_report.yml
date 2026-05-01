@@ -1,0 +1,19 @@
+name: Bug report
+description: Report a pi-sandbox bug
+title: "bug: "
+labels: [bug]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: What happened?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction
+      description: Minimal steps to reproduce.
+    validations:
+      required: true
