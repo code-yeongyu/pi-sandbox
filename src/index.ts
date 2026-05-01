@@ -1,4 +1,5 @@
 // src/index.ts — Extension factory: pi.registerTool / pi.registerCommand / pi.registerFlag / pi.on(...)
+import { type QemuDoctorReport, runQemuDoctor } from "./backends/qemu/doctor.js";
 import { toAgentContextBlock } from "./explain/render-agent-context.js";
 import { toSandboxStatus } from "./explain/render-tui.js";
 import { reapOrphans } from "./lifecycle/orphan-reaper.js";
@@ -66,7 +67,23 @@ export default function piSandboxExtension(pi: ExtensionAPI): void {
 				ctx.ui.notify("pi-sandbox: not initialized", "warning");
 				return;
 			}
-			ctx.ui.notify(toSandboxStatus(manager.getEffectivePolicy(), manager.getMode(), [], []), "info");
+			const effectivePolicy = manager.getEffectivePolicy();
+			const qemuDoctor =
+				effectivePolicy.backend.kind === "qemu"
+					? `\n${formatQemuDoctor(await runQemuDoctor(ctx.cwd ?? process.cwd()))}`
+					: "";
+			ctx.ui.notify(`${toSandboxStatus(effectivePolicy, manager.getMode(), [], [])}${qemuDoctor}`, "info");
 		},
 	});
+}
+
+function formatQemuDoctor(report: QemuDoctorReport): string {
+	return [
+		"qemu doctor:",
+		`binaryPath: ${report.binaryPath ?? "missing"}`,
+		`version: ${report.version ?? "unknown"}`,
+		`accelerator: ${report.accelerator}`,
+		`fixture: present=${report.fixture.present} checksum=${report.fixture.checksumMatch} manifest=${report.fixture.manifestSha256 ?? "missing"}`,
+		...report.checks.map((check) => `doctor ${check.name}: ${check.status} (${check.details})`),
+	].join("\n");
 }
