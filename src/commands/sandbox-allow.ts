@@ -1,2 +1,32 @@
-// src/commands/sandbox-allow.ts — /sandbox-allow <class> <target> [--scope] (typed grants)
-export {};
+import type { ApprovalStore } from "../approvals/store.js";
+import type { ExtensionAPI } from "../pi/index.js";
+import type { SandboxManager } from "../sandbox/manager.js";
+import { parseGrantArgs, persistProjectGrant } from "./grants.js";
+
+export function registerSandboxAllowCommand(pi: ExtensionAPI, manager: SandboxManager, store: ApprovalStore): void {
+	pi.registerCommand("sandbox-allow", {
+		description: "Persist a typed pi-sandbox allow grant",
+		handler: async (args, ctx) => {
+			const parsed = parseGrantArgs(args);
+			if (parsed === null) {
+				ctx.ui.notify(
+					"usage: /sandbox-allow <file.read|file.write|domain|url-prefix|port|binary> <target>",
+					"error",
+				);
+				return;
+			}
+			const persisted = await persistProjectGrant(ctx.cwd ?? process.cwd(), parsed, "allow");
+			if (!persisted.ok) {
+				ctx.ui.notify(persisted.message, "error");
+				return;
+			}
+			store.add({ requestId: persisted.requestId, class: parsed.class, target: parsed.target, addedAt: Date.now() });
+			const reloaded = await manager.reloadEffectivePolicy();
+			if (!reloaded.ok) {
+				ctx.ui.notify(reloaded.error.remediation, "error");
+				return;
+			}
+			ctx.ui.notify(`pi-sandbox allow grant added: ${parsed.class} ${parsed.target}`, "info");
+		},
+	});
+}

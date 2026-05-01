@@ -1,2 +1,22 @@
-// src/commands/sandbox-switch.ts — /sandbox-switch <backend> [--scope]
-export {};
+import type { ApprovalStore } from "../approvals/store.js";
+import type { ExtensionAPI } from "../pi/index.js";
+import { BackendKindSchema } from "../policy/desired.js";
+import type { SandboxManager } from "../sandbox/manager.js";
+
+export function registerSandboxSwitchCommand(pi: ExtensionAPI, _manager: SandboxManager, _store: ApprovalStore): void {
+	pi.registerCommand("sandbox-switch", {
+		description: "Validate a pi-sandbox backend switch",
+		handler: async (args, ctx) => {
+			const backend = args.trim();
+			const parsed = BackendKindSchema.safeParse(backend);
+			if (!parsed.success) {
+				ctx.ui.notify(`Unknown sandbox backend: ${backend || "<empty>"}`, "error");
+				return;
+			}
+			ctx.ui.notify(
+				`Sandbox backend '${parsed.data}' is valid. Runtime backend switching requires session restart because backend factories and lifecycle are session-scoped.`,
+				"info",
+			);
+		},
+	});
+}

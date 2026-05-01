@@ -1,7 +1,13 @@
 // src/index.ts — Extension factory: pi.registerTool / pi.registerCommand / pi.registerFlag / pi.on(...)
-import { type QemuDoctorReport, runQemuDoctor } from "./backends/qemu/doctor.js";
+
+import { createPromptHandler } from "./approvals/prompt.js";
+import { ApprovalStore } from "./approvals/store.js";
+import { registerSandboxCommand } from "./commands/sandbox.js";
+import { registerSandboxAllowCommand } from "./commands/sandbox-allow.js";
+import { registerSandboxDenyCommand } from "./commands/sandbox-deny.js";
+import { registerSandboxStatusCommand } from "./commands/sandbox-status.js";
+import { registerSandboxSwitchCommand } from "./commands/sandbox-switch.js";
 import { toAgentContextBlock } from "./explain/render-agent-context.js";
-import { toSandboxStatus } from "./explain/render-tui.js";
 import { reapOrphans } from "./lifecycle/orphan-reaper.js";
 import { onSessionShutdown } from "./lifecycle/session-shutdown.js";
 import { onSessionStart } from "./lifecycle/session-start.js";
@@ -17,6 +23,8 @@ import { toBashOperations } from "./tools/bash-adapter.js";
 import { toEditOperations } from "./tools/edit-adapter.js";
 import { toReadOperations } from "./tools/read-adapter.js";
 import { toWriteOperations } from "./tools/write-adapter.js";
+import { installFooter } from "./tui/footer.js";
+import { type InstalledWidget, installWidget } from "./tui/widget.js";
 
 type FlagCapableExtensionAPI = ExtensionAPI & {
 	registerFlag?: (
@@ -26,6 +34,9 @@ type FlagCapableExtensionAPI = ExtensionAPI & {
 };
 
 let manager: SandboxManager | null = null;
+let approvalStore: ApprovalStore | null = null;
+let disposeFooter: (() => void) | null = null;
+let installedWidget: InstalledWidget | null = null;
 
 export default function piSandboxExtension(pi: ExtensionAPI): void {
 	const flagCapablePi: FlagCapableExtensionAPI = pi;
@@ -39,13 +50,34 @@ export default function piSandboxExtension(pi: ExtensionAPI): void {
 
 	pi.on("session_start", async (_event, ctx) => {
 		const result = await onSessionStart(pi, ctx);
-		if (result.ok) manager = result.value;
+		if (!result.ok) return;
+		manager = result.value;
+		approvalStore = new ApprovalStore();
+		manager.setCwd(ctx.cwd ?? process.cwd());
+		manager.setPromptHandler(createPromptHandler(ctx.ui, approvalStore));
+		await manager.reloadEffectivePolicy();
+		const uiPi = { ...pi, ui: ctx.ui };
+		disposeFooter = installFooter(uiPi, manager);
+		installedWidget = installWidget(uiPi, manager);
+		installedWidget.update();
+		manager.setBlockHandler((block) => installedWidget?.update(block));
+		registerSandboxCommand(pi, manager, approvalStore);
+		registerSandboxStatusCommand(pi, manager, approvalStore);
+		registerSandboxSwitchCommand(pi, manager, approvalStore);
+		registerSandboxAllowCommand(pi, manager, approvalStore);
+		registerSandboxDenyCommand(pi, manager, approvalStore);
 	});
 
 	pi.on("session_shutdown", async (_event, ctx) => {
 		if (manager === null) return;
+		disposeFooter?.();
+		installedWidget?.dispose();
 		await onSessionShutdown(manager, ctx);
 		manager = null;
+		approvalStore?.clear();
+		approvalStore = null;
+		disposeFooter = null;
+		installedWidget = null;
 	});
 
 	pi.on("session_start", async (_event, ctx) => {
@@ -71,31 +103,4 @@ export default function piSandboxExtension(pi: ExtensionAPI): void {
 
 	pi.on("tool_call", async () => undefined);
 	pi.on("tool_result", async () => undefined);
-
-	pi.registerCommand("sandbox-status", {
-		description: "Print active pi-sandbox status",
-		handler: async (_args, ctx) => {
-			if (manager === null) {
-				ctx.ui.notify("pi-sandbox: not initialized", "warning");
-				return;
-			}
-			const effectivePolicy = manager.getEffectivePolicy();
-			const qemuDoctor =
-				effectivePolicy.backend.kind === "qemu"
-					? `\n${formatQemuDoctor(await runQemuDoctor(ctx.cwd ?? process.cwd()))}`
-					: "";
-			ctx.ui.notify(`${toSandboxStatus(effectivePolicy, manager.getMode(), [], [])}${qemuDoctor}`, "info");
-		},
-	});
-}
-
-function formatQemuDoctor(report: QemuDoctorReport): string {
-	return [
-		"qemu doctor:",
-		`binaryPath: ${report.binaryPath ?? "missing"}`,
-		`version: ${report.version ?? "unknown"}`,
-		`accelerator: ${report.accelerator}`,
-		`fixture: present=${report.fixture.present} checksum=${report.fixture.checksumMatch} manifest=${report.fixture.manifestSha256 ?? "missing"}`,
-		...report.checks.map((check) => `doctor ${check.name}: ${check.status} (${check.details})`),
-	].join("\n");
 }
