@@ -64,7 +64,7 @@
 		"@types/ssh2": "latest",
 		"@typescript/native-preview": "latest",
 		"expect-type": "latest",
-		"typescript": "^5.9.0",
+		"typescript": "^6.0.3",
 		"vitest": "^4.0.0",
 		"zod-to-json-schema": "latest"
 	},
