@@ -37,8 +37,14 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Check
-        run: npm run check
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Lint forbidden patterns
+        run: npm run lint:forbidden
 
       - name: Unit tests
         run: npm test
@@ -47,5 +53,32 @@ jobs:
         run: npm run test:integration
         continue-on-error: true
 
+      - name: Schema freshness
+        run: |
+          npm run generate:schema
+          git diff --exit-code schema/sandbox.schema.json || (
+            echo "Schema is stale. Run 'npm run generate:schema' and commit the result."
+            exit 1
+          )
+
       - name: Package dry run
+        run: npm pack --dry-run
+
+  package:
+    name: package
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Pack
         run: npm pack --dry-run
