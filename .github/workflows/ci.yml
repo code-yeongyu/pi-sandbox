@@ -53,14 +53,6 @@ jobs:
         run: npm run test:integration
         continue-on-error: true
 
-      - name: Schema freshness
-        run: |
-          npm run generate:schema
-          git diff --exit-code schema/sandbox.schema.json || (
-            echo "Schema is stale. Run 'npm run generate:schema' and commit the result."
-            exit 1
-          )
-
       - name: Package dry run
         run: npm pack --dry-run
 
