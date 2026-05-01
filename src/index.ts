@@ -5,9 +5,18 @@ import { toSandboxStatus } from "./explain/render-tui.js";
 import { reapOrphans } from "./lifecycle/orphan-reaper.js";
 import { onSessionShutdown } from "./lifecycle/session-shutdown.js";
 import { onSessionStart } from "./lifecycle/session-start.js";
-import { createBashToolDefinition, type ExtensionAPI } from "./pi/index.js";
+import {
+	createBashToolDefinition,
+	createEditToolDefinition,
+	createReadToolDefinition,
+	createWriteToolDefinition,
+	type ExtensionAPI,
+} from "./pi/index.js";
 import type { SandboxManager } from "./sandbox/manager.js";
 import { toBashOperations } from "./tools/bash-adapter.js";
+import { toEditOperations } from "./tools/edit-adapter.js";
+import { toReadOperations } from "./tools/read-adapter.js";
+import { toWriteOperations } from "./tools/write-adapter.js";
 
 type FlagCapableExtensionAPI = ExtensionAPI & {
 	registerFlag?: (
@@ -43,6 +52,9 @@ export default function piSandboxExtension(pi: ExtensionAPI): void {
 		if (manager === null) return;
 		const cwd = ctx.cwd ?? process.cwd();
 		pi.registerTool(createBashToolDefinition(cwd, { operations: toBashOperations(manager) }));
+		pi.registerTool(createReadToolDefinition(cwd, { operations: toReadOperations(manager) }));
+		pi.registerTool(createWriteToolDefinition(cwd, { operations: toWriteOperations(manager) }));
+		pi.registerTool(createEditToolDefinition(cwd, { operations: toEditOperations(manager) }));
 	});
 
 	pi.on("before_agent_start", async (event) => {
