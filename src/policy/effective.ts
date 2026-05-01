@@ -1,77 +1,134 @@
 // src/policy/effective.ts — EffectivePolicy + EffectiveBackendState types
-import type { BackendCapability, SandboxControl } from "./capability.js";
-import type { EnvPolicy, FilePolicy, NetworkPolicy, ProcessPolicy } from "./desired.js";
+import { z } from "zod";
+import type { SandboxControl } from "../security/failure.js";
+import { type BackendCapability, BackendCapabilitySchema, SandboxControlSchema } from "./capability.js";
+import {
+	type BackendKind,
+	BackendKindSchema,
+	type EnvPolicy,
+	EnvPolicySchema,
+	type FilePolicy,
+	FilePolicySchema,
+	type NetworkPolicy,
+	NetworkPolicySchema,
+	type ProcessPolicy,
+	ProcessPolicySchema,
+} from "./desired.js";
 
-export type BackendKind = "native" | "docker" | "justbash" | "qemu" | "ssh";
+export const ControlStateSchema = z.enum(["enforced", "simulated", "unverified", "unsupported"]);
 
-export type NativeBackendConfig =
-	| { kind: "native"; platform: "darwin"; mechanism: "sandbox-exec" }
-	| { kind: "native"; platform: "linux"; mechanism: "bwrap" | "landlock-experimental" }
-	| { kind: "native"; platform: "win32"; mechanism: "appcontainer" | "wsl2-bwrap" };
+export const ControlEvidenceSchema = z
+	.object({
+		state: ControlStateSchema,
+		reason: z.string().optional(),
+		probeName: z.string().optional(),
+		probeRanAt: z.string().optional(),
+	})
+	.strict()
+	.readonly();
 
-export type DesiredBackendConfig =
-	| { kind: "auto" }
-	| NativeBackendConfig
-	| {
-			kind: "docker";
-			image: string;
-			networkMode: "none" | "bridge";
-			readonlyRootfs: boolean;
-			mounts: readonly string[];
-	  }
-	| {
-			kind: "justbash";
-			fs: "memory" | "overlay" | "read-write-root-locked";
-			allowedBinaries: readonly string[];
-			allowedLibraries: readonly string[];
-			network?: NetworkPolicy;
-			customCommands: readonly string[];
-			executionLimits: { timeoutMs: number; maxOutputBytes: number };
-	  }
-	| {
-			kind: "qemu";
-			assets: { mode: "smoke"; assetId: string } | { mode: "user"; kernelPath: string; initrdPath: string };
-			cpus: number;
-			memoryMb: number;
-			shareMode: "ro-9p" | "controlled-rw";
-			network: NetworkPolicy;
-			snapshot: boolean;
-	  }
-	| {
-			kind: "ssh";
-			host: string;
-			port: number;
-			username: string;
-			auth: { method: "password" | "private-key" | "agent" | "keyboard-interactive" | "hostbased" };
-			hostVerification: { hostHash: string } | { hostVerifierCommand: string };
-			remoteRoot: string;
-			sync: "none" | "rsync";
-			proxyJump?: string;
-	  };
+export const EffectiveControlsSchema = z
+	.object({
+		fileRead: ControlEvidenceSchema,
+		fileWrite: ControlEvidenceSchema,
+		fsPathResolution: ControlEvidenceSchema,
+		networkDeny: ControlEvidenceSchema,
+		networkAllowlist: ControlEvidenceSchema,
+		processIsolation: ControlEvidenceSchema,
+		envScrub: ControlEvidenceSchema,
+		stdoutCapture: ControlEvidenceSchema,
+		pathMapping: ControlEvidenceSchema,
+		persistence: ControlEvidenceSchema,
+		denialAttribution: ControlEvidenceSchema,
+	})
+	.strict()
+	.readonly();
 
-export type ProbeResult = {
-	name: string;
-	status: "passed" | "failed" | "skipped";
-	evidence: string;
-};
+export const ProbeResultSchema = z.discriminatedUnion("kind", [
+	z
+		.object({
+			kind: z.literal("passed"),
+			evidence: z.string(),
+			control: SandboxControlSchema,
+		})
+		.strict()
+		.readonly(),
+	z
+		.object({
+			kind: z.literal("failed"),
+			command: z.string(),
+			exitCode: z.number().int().nullable(),
+			signal: z.string().optional(),
+			stderrExcerpt: z.string().optional(),
+			reason: z.string(),
+			fixHint: z.string().optional(),
+			control: SandboxControlSchema,
+		})
+		.strict()
+		.readonly(),
+]);
 
+export const EffectiveBackendStateSchema = z
+	.object({
+		kind: BackendKindSchema,
+		status: z.enum(["available", "degraded", "experimental", "unavailable"]),
+		capabilities: BackendCapabilitySchema,
+		effectiveControls: EffectiveControlsSchema,
+		unsupportedControls: z.array(SandboxControlSchema).readonly(),
+		probeResults: z.array(ProbeResultSchema).readonly(),
+		diagnostics: z.array(z.string()).readonly(),
+	})
+	.strict()
+	.readonly();
+
+export const EffectivePolicySchema = z
+	.object({
+		network: NetworkPolicySchema,
+		file: FilePolicySchema,
+		process: ProcessPolicySchema,
+		env: EnvPolicySchema,
+		backend: EffectiveBackendStateSchema,
+		desiredPolicyHash: z.string(),
+		grantHash: z.string(),
+		effectiveCapabilityHash: z.string(),
+		policyRevision: z.number().int().nonnegative(),
+	})
+	.strict()
+	.readonly();
+
+export const HealthResultSchema = z
+	.object({
+		healthy: z.boolean(),
+		backend: BackendKindSchema,
+		latencyMs: z.number().nonnegative(),
+		details: z.string().optional(),
+	})
+	.strict()
+	.readonly();
+
+export type ControlState = z.infer<typeof ControlStateSchema>;
+export type ControlEvidence = z.infer<typeof ControlEvidenceSchema>;
+export type EffectiveControls = Readonly<Record<SandboxControl, ControlEvidence>>;
+export type ProbeResult = z.infer<typeof ProbeResultSchema>;
 export type EffectiveBackendState = {
-	kind: BackendKind;
-	status: "available" | "degraded" | "experimental" | "unavailable";
-	capabilities: BackendCapability;
-	unsupportedControls: readonly SandboxControl[];
-	probeResults: readonly ProbeResult[];
-	diagnostics: readonly string[];
+	readonly kind: BackendKind;
+	readonly status: "available" | "degraded" | "experimental" | "unavailable";
+	readonly capabilities: BackendCapability;
+	readonly effectiveControls: EffectiveControls;
+	readonly unsupportedControls: readonly SandboxControl[];
+	readonly probeResults: readonly ProbeResult[];
+	readonly diagnostics: readonly string[];
 };
-
 export type EffectivePolicy = {
-	file: FilePolicy;
-	network: NetworkPolicy;
-	process: ProcessPolicy;
-	env: EnvPolicy;
-	backend: EffectiveBackendState;
-	desiredPolicyHash: string;
-	grantHash: string;
-	effectiveCapabilityHash: string;
-	policyRevision: number;
+	readonly network: NetworkPolicy;
+	readonly file: FilePolicy;
+	readonly process: ProcessPolicy;
+	readonly env: EnvPolicy;
+	readonly backend: EffectiveBackendState;
+	readonly desiredPolicyHash: string;
+	readonly grantHash: string;
+	readonly effectiveCapabilityHash: string;
+	readonly policyRevision: number;
 };
+export type HealthResult = z.infer<typeof HealthResultSchema>;
+export type { BackendKind } from "./desired.js";

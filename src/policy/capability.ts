@@ -1,43 +1,34 @@
 // src/policy/capability.ts — BackendCapability + SandboxControl types
-export type SandboxControl =
-	| "fileRead"
-	| "fileWrite"
-	| "fsPathResolution"
-	| "networkDeny"
-	| "networkAllowlist"
-	| "processIsolation"
-	| "envScrub"
-	| "stdoutCapture"
-	| "pathMapping"
-	| "persistence"
-	| "denialAttribution";
+import { z } from "zod";
 
-export type SandboxControlEffectiveness = "enforced" | "simulated" | "unverified" | "unsupported";
+export type { SandboxControl } from "../security/failure.js";
+export { SandboxControlSchema } from "../security/failure.js";
 
-export type ControlState<TDesired> = {
-	desired: TDesired;
-	effective: SandboxControlEffectiveness;
-	evidence: readonly string[];
-};
+export const FsPathResolutionSchema = z.enum([
+	"kernel-openat2",
+	"backend-mount-boundary",
+	"realpath-canonical-residual-toctou",
+	"unsupported",
+]);
 
-export type FsPathResolutionCapability =
-	| "kernel-openat2"
-	| "backend-mount-boundary"
-	| "realpath-canonical(residual-risk:toctou)"
-	| "unsupported";
+export const BackendCapabilitySchema = z
+	.object({
+		fileRead: z.boolean(),
+		fileWrite: z.boolean(),
+		fsPathResolution: FsPathResolutionSchema,
+		networkDeny: z.boolean(),
+		networkAllowlist: z.boolean(),
+		networkGateway: z.boolean(),
+		processIsolation: z.boolean(),
+		envScrub: z.boolean(),
+		stdoutCapture: z.enum(["streaming", "exit-code-only"]),
+		pathMapping: z.boolean(),
+		persistence: z.boolean(),
+		denialAttribution: z.boolean(),
+	})
+	.strict()
+	.readonly();
 
-export type StdoutCaptureCapability = "streaming" | "exit-code-only";
-
-export type BackendCapability = {
-	fileRead: ControlState<boolean>;
-	fileWrite: ControlState<boolean>;
-	fsPathResolution: ControlState<FsPathResolutionCapability>;
-	networkDeny: ControlState<boolean>;
-	networkAllowlist: ControlState<boolean>;
-	processIsolation: ControlState<boolean>;
-	envScrub: ControlState<boolean>;
-	stdoutCapture: ControlState<StdoutCaptureCapability>;
-	pathMapping: ControlState<boolean>;
-	persistence: ControlState<"ephemeral" | "host" | "unsupported">;
-	denialAttribution: ControlState<boolean>;
-};
+export type FsPathResolution = z.infer<typeof FsPathResolutionSchema>;
+export type BackendCapability = z.infer<typeof BackendCapabilitySchema>;
+export type NonEmptyArray<TValue> = readonly [TValue, ...TValue[]];
