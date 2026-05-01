@@ -24,9 +24,18 @@
 		"typescript"
 	],
 	"pi": {
-		"extensions": ["./src/index.ts"]
+		"extensions": [
+			"./src/index.ts"
+		]
 	},
-	"files": ["src", "schema", "LICENSE", "NOTICE", "README.md", "CHANGELOG.md"],
+	"files": [
+		"src",
+		"schema",
+		"LICENSE",
+		"NOTICE",
+		"README.md",
+		"CHANGELOG.md"
+	],
 	"scripts": {
 		"test": "vitest run",
 		"test:watch": "vitest",
@@ -44,6 +53,7 @@
 	"dependencies": {
 		"dockerode": "latest",
 		"jsonc-parser": "latest",
+		"just-bash": "^2.14.3",
 		"ssh2": "latest",
 		"zod": "latest"
 	},
