@@ -7,10 +7,11 @@ import { Client, type ClientChannel, type ConnectConfig } from "ssh2";
 import type { BackendCapability, SandboxControl } from "../../policy/capability.js";
 import type { SshBackendConfig } from "../../policy/desired.js";
 import type { HealthResult, ProbeResult } from "../../policy/effective.js";
-import type { SandboxBackend, SandboxExecOptions } from "../../sandbox/backend.js";
+import type { SandboxBackend, SandboxExecOptions, SandboxReadFacet, SandboxWriteFacet } from "../../sandbox/backend.js";
 import type { PathMapper } from "../../sandbox/path-mapper.js";
 import { createBlock, type Result, type SandboxFailure } from "../../security/failure.js";
 import { createStreamingRedactor } from "../../security/redactor.js";
+import { createShellFileFacets } from "../shell-file-facets.js";
 import { answerKeyboardInteractivePrompts, buildConnectConfig } from "./auth.js";
 import { buildHostVerifier } from "./host-verify.js";
 import { buildProxyJumpChain } from "./proxy-jump.js";
@@ -28,6 +29,8 @@ class SshSandboxBackend implements SandboxBackend {
 	public readonly pathMapper: PathMapper;
 	public readonly lifecycle = new SshLifecycle(this);
 	public readonly bash = { exec: this.exec.bind(this) };
+	public readonly read: SandboxReadFacet;
+	public readonly write: SandboxWriteFacet;
 	readonly #config: SshBackendConfig;
 	readonly #sessionRoot: string;
 	#client: Client | null = null;
@@ -37,6 +40,9 @@ class SshSandboxBackend implements SandboxBackend {
 		this.#config = config;
 		this.#sessionRoot = path.resolve(sessionRoot);
 		this.pathMapper = new SshPathMapper(sessionRoot, config.remoteRoot);
+		const fileFacets = createShellFileFacets(this.kind, this.pathMapper, this.bash);
+		this.read = fileFacets.read;
+		this.write = fileFacets.write;
 	}
 
 	public async connect(): Promise<Result<void, SandboxFailure>> {
@@ -161,9 +167,8 @@ class SshLifecycle {
 	}
 
 	public async probe(controls: readonly SandboxControl[]): Promise<readonly ProbeResult[]> {
-		const hostKeyProbe = await probeBadHostKeyRejection();
 		const requested = await Promise.all(controls.map((control) => this.#backend.probeControl(control)));
-		return [hostKeyProbe, ...requested];
+		return requested;
 	}
 }
 
@@ -199,10 +204,10 @@ class SshPathMapper implements PathMapper {
 	}
 }
 
-const sshCapability = {
-	fileRead: false,
-	fileWrite: false,
-	fsPathResolution: "unsupported",
+export const sshCapability = {
+	fileRead: true,
+	fileWrite: true,
+	fsPathResolution: "backend-mount-boundary",
 	networkDeny: false,
 	networkAllowlist: false,
 	networkGateway: false,
@@ -210,7 +215,7 @@ const sshCapability = {
 	envScrub: true,
 	stdoutCapture: "streaming",
 	pathMapping: true,
-	persistence: true,
+	persistence: false,
 	denialAttribution: false,
 } satisfies BackendCapability;
 
@@ -306,17 +311,6 @@ function isSecretEnvName(name: string): boolean {
 	return /(?:_KEY|_TOKEN|_SECRET|_PASSWORD|_PASSWD|^SSH_AUTH_SOCK$|^AWS_.+|^GCP_.+|^GOOGLE_APPLICATION_CREDENTIALS$)/iu.test(
 		name,
 	);
-}
-
-async function probeBadHostKeyRejection(): Promise<ProbeResult> {
-	const verifier = buildHostVerifier({ strict: true, hostHash: "SHA256:not-a-real-fingerprint" });
-	return verifier(Buffer.from("bad-host-key"))
-		? failedProbe("hostVerifier", null, "bad fingerprint was accepted", "processIsolation")
-		: {
-				kind: "passed",
-				evidence: "strict SSH host verifier rejects a mismatched SHA-256 fingerprint",
-				control: "processIsolation",
-			};
 }
 
 function failedProbe(command: string, exitCode: number | null, reason: string, control: SandboxControl): ProbeResult {

@@ -1,11 +1,18 @@
 // src/backends/justbash/adapter.ts — new Bash() per call; ReadWriteFs/OverlayFs selection
 
 import { randomUUID } from "node:crypto";
-import { mkdir, rm } from "node:fs/promises";
+import {
+	access as accessHostPath,
+	mkdir,
+	readFile as readHostFile,
+	realpath,
+	rm,
+	writeFile as writeHostFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { Bash, type Command, type IFileSystem, type NetworkConfig, ReadWriteFs } from "just-bash";
+import { Bash, type Command, type NetworkConfig, ReadWriteFs } from "just-bash";
 
 import type { BackendCapability } from "../../policy/capability.js";
 import type { EnvPolicy, JustbashBackendConfig } from "../../policy/desired.js";
@@ -22,7 +29,10 @@ export async function createJustbashBackend(
 	root: string,
 	envPolicy: EnvPolicy,
 ): Promise<Result<SandboxBackend, SandboxFailure>> {
-	const sandboxRoot = path.join(tmpdir(), "pi-sandbox", `sess-${process.pid}-${randomUUID()}`);
+	const ownsSandboxRoot = config.fs !== "read-write-root-locked";
+	const sandboxRoot = ownsSandboxRoot
+		? path.join(tmpdir(), "pi-sandbox", `sess-${process.pid}-${randomUUID()}`)
+		: path.resolve(root);
 	await mkdir(sandboxRoot, { recursive: true });
 	const network = toJustbashNetworkConfig(config.network);
 	if (!network.ok) return network;
@@ -38,6 +48,7 @@ export async function createJustbashBackend(
 			config,
 			projectRoot: root,
 			sandboxRoot,
+			ownsSandboxRoot,
 			fs,
 			network: network.value,
 			customCommands,
@@ -50,7 +61,8 @@ type BackendOptions = {
 	readonly config: JustbashBackendConfig;
 	readonly projectRoot: string;
 	readonly sandboxRoot: string;
-	readonly fs: IFileSystem;
+	readonly ownsSandboxRoot: boolean;
+	readonly fs: ReadWriteFs;
 	readonly network: NetworkConfig | undefined;
 	readonly customCommands: readonly Command[];
 	readonly envPolicy: EnvPolicy;
@@ -62,9 +74,12 @@ class JustbashSandboxBackend implements SandboxBackend {
 	public readonly pathMapper: PathMapper;
 	public readonly lifecycle = new JustbashLifecycle(this);
 	public readonly bash = { exec: this.exec.bind(this) };
+	public readonly read = { readFile: this.readFile.bind(this), access: this.access.bind(this) };
+	public readonly write = { writeFile: this.writeFile.bind(this), mkdir: this.mkdir.bind(this) };
 	public readonly sandboxRoot: string;
+	public readonly ownsSandboxRoot: boolean;
 	readonly #config: JustbashBackendConfig;
-	readonly #fs: IFileSystem;
+	readonly #fs: ReadWriteFs;
 	readonly #network: NetworkConfig | undefined;
 	readonly #customCommands: readonly Command[];
 	readonly #envPolicy: EnvPolicy;
@@ -76,6 +91,7 @@ class JustbashSandboxBackend implements SandboxBackend {
 		this.#customCommands = options.customCommands;
 		this.#envPolicy = options.envPolicy;
 		this.sandboxRoot = options.sandboxRoot;
+		this.ownsSandboxRoot = options.ownsSandboxRoot;
 		this.pathMapper = new JustbashPathMapper(options.projectRoot, options.sandboxRoot);
 	}
 
@@ -134,6 +150,120 @@ class JustbashSandboxBackend implements SandboxBackend {
 			options.signal?.removeEventListener("abort", abort);
 		}
 	}
+
+	public async readFile(absolutePath: string): Promise<Result<Buffer, SandboxFailure>> {
+		const mappedPath = await this.realPathForRead(absolutePath, "read.readFile");
+		if (!mappedPath.ok) return mappedPath;
+		try {
+			return { ok: true, value: await readHostFile(mappedPath.value) };
+		} catch (cause) {
+			return { ok: false, error: backendError(errorMessage(cause)) };
+		}
+	}
+
+	public async access(absolutePath: string): Promise<Result<void, SandboxFailure>> {
+		const mappedPath = await this.realPathForRead(absolutePath, "read.access");
+		if (!mappedPath.ok) return mappedPath;
+		try {
+			await accessHostPath(mappedPath.value);
+			return { ok: true, value: undefined };
+		} catch (cause) {
+			return { ok: false, error: backendError(errorMessage(cause)) };
+		}
+	}
+
+	public async writeFile(absolutePath: string, content: string | Buffer): Promise<Result<void, SandboxFailure>> {
+		const mappedPath = await this.realPathForWrite(absolutePath, "write.writeFile");
+		if (!mappedPath.ok) return mappedPath;
+		try {
+			await writeHostFile(mappedPath.value, content);
+			return { ok: true, value: undefined };
+		} catch (cause) {
+			return { ok: false, error: backendError(errorMessage(cause)) };
+		}
+	}
+
+	public async mkdir(absolutePath: string): Promise<Result<void, SandboxFailure>> {
+		const mappedPath = await this.realPathForWrite(absolutePath, "write.mkdir");
+		if (!mappedPath.ok) return mappedPath;
+		try {
+			await mkdir(mappedPath.value, { recursive: true });
+			return { ok: true, value: undefined };
+		} catch (cause) {
+			return { ok: false, error: backendError(errorMessage(cause)) };
+		}
+	}
+
+	private async realPathForRead(absolutePath: string, operation: string): Promise<Result<string, SandboxFailure>> {
+		const mappedPath = this.pathMapper.hostToSandboxPath(absolutePath);
+		if (!mappedPath.ok)
+			return {
+				ok: false,
+				error: backendFailure("path_mapping_failed", "backend", operation, absolutePath, mappedPath.error.kind),
+			};
+		try {
+			const root = await realpath(this.sandboxRoot);
+			const target = await realpath(path.join(root, mappedPath.value.slice(1)));
+			if (isInsideRoot(root, target)) return { ok: true, value: target };
+			return {
+				ok: false,
+				error: backendFailure("permission_denied", "file.read", operation, absolutePath, "file.root.escape"),
+			};
+		} catch (cause) {
+			return { ok: false, error: backendError(errorMessage(cause)) };
+		}
+	}
+
+	private async realPathForWrite(absolutePath: string, operation: string): Promise<Result<string, SandboxFailure>> {
+		const mappedPath = this.pathMapper.hostToSandboxPath(absolutePath);
+		if (!mappedPath.ok)
+			return {
+				ok: false,
+				error: backendFailure("path_mapping_failed", "backend", operation, absolutePath, mappedPath.error.kind),
+			};
+		try {
+			const root = await realpath(this.sandboxRoot);
+			const target = path.resolve(root, mappedPath.value.slice(1));
+
+			// Find nearest existing ancestor and verify it resolves inside root
+			let parent = target;
+			while (true) {
+				try {
+					await accessHostPath(parent);
+					break;
+				} catch {
+					const next = path.dirname(parent);
+					if (next === parent) break;
+					parent = next;
+				}
+			}
+			const realParent = await realpath(parent);
+			if (!isInsideRoot(root, realParent)) {
+				return {
+					ok: false,
+					error: backendFailure("permission_denied", "file.write", operation, absolutePath, "file.root.escape"),
+				};
+			}
+
+			// If target exists, realpath it and verify it resolves inside root
+			try {
+				await accessHostPath(target);
+				const realTarget = await realpath(target);
+				if (!isInsideRoot(root, realTarget)) {
+					return {
+						ok: false,
+						error: backendFailure("permission_denied", "file.write", operation, absolutePath, "file.root.escape"),
+					};
+				}
+			} catch {
+				// target does not exist, which is expected for new writes
+			}
+
+			return { ok: true, value: target };
+		} catch (cause) {
+			return { ok: false, error: backendError(errorMessage(cause)) };
+		}
+	}
 }
 
 class JustbashLifecycle {
@@ -149,6 +279,7 @@ class JustbashLifecycle {
 	}
 
 	public async dispose(): Promise<void> {
+		if (!this.#backend.ownsSandboxRoot) return;
 		await rm(this.#backend.sandboxRoot, { recursive: true, force: true });
 	}
 
@@ -196,8 +327,8 @@ const justbashCapability = {
 	fileWrite: true,
 	fsPathResolution: "backend-mount-boundary",
 	networkDeny: true,
-	networkAllowlist: true,
-	networkGateway: true,
+	networkAllowlist: false,
+	networkGateway: false,
 	processIsolation: true,
 	envScrub: true,
 	stdoutCapture: "streaming",
@@ -212,7 +343,7 @@ function extractAbsolutePaths(command: string): readonly string[] {
 
 function backendFailure(
 	code: "permission_denied" | "path_mapping_failed",
-	policyArea: "file.read" | "backend",
+	policyArea: "file.read" | "file.write" | "backend",
 	operation: string,
 	sanitizedTarget: string,
 	matchedRule: string,
@@ -248,4 +379,13 @@ function backendError(message: string): SandboxFailure {
 		remediation: "Inspect the justbash backend error and retry with a supported shell command.",
 		backendMessage: message,
 	});
+}
+
+function isInsideRoot(root: string, target: string): boolean {
+	const relativePath = path.relative(root, target);
+	return relativePath === "" || (!relativePath.startsWith("..") && !path.isAbsolute(relativePath));
+}
+
+function errorMessage(cause: unknown): string {
+	return cause instanceof Error ? cause.message : String(cause);
 }

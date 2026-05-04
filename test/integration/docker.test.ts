@@ -51,26 +51,6 @@ describe.skipIf(!dockerAvailable)("docker backend integration", () => {
 		}
 	}, 10_000);
 
-	it("#given config tries to bind /var/run/docker.sock #when host-config built #then it is rejected with sandbox_backend_error", () => {
-		const result = buildDockerContainerOptions(
-			{
-				...dockerConfig,
-				mounts: [
-					{
-						hostPath: "/var/run/docker.sock",
-						sandboxPath: "/docker.sock",
-						mode: "readonly",
-						persist: "host",
-					},
-				],
-			},
-			process.cwd(),
-		);
-
-		expect(result.ok).toBe(false);
-		if (!result.ok) expect(result.error.code).toBe("sandbox_backend_error");
-	});
-
 	it("#given readonly rootfs #when touch /readonly is attempted #then it fails", async () => {
 		const sessionRoot = await mkdtemp(path.join(tmpdir(), "pi-sandbox-docker-"));
 		try {
@@ -102,6 +82,57 @@ describe.skipIf(!dockerAvailable)("docker backend integration", () => {
 		} finally {
 			await rm(sessionRoot, { recursive: true, force: true });
 		}
+	});
+});
+
+describe("docker host config hardening", () => {
+	it("#given config tries to bind /var/run/docker.sock #when host-config built #then it is rejected with sandbox_backend_error", () => {
+		const result = buildDockerContainerOptions(
+			{
+				...dockerConfig,
+				mounts: [
+					{
+						hostPath: "/var/run/docker.sock",
+						sandboxPath: "/docker.sock",
+						mode: "readonly",
+						persist: "host",
+					},
+				],
+			},
+			process.cwd(),
+		);
+
+		expect(result.ok).toBe(false);
+		if (!result.ok) expect(result.error.code).toBe("sandbox_backend_error");
+	});
+
+	it("#given session root contains colon #when host-config built #then ambiguous Docker bind is rejected", () => {
+		const result = buildDockerContainerOptions(dockerConfig, "/tmp/pi:sandbox");
+
+		expect(result.ok).toBe(false);
+		if (!result.ok) expect(result.error.matchedRule).toBe("docker.binds.no-colon");
+	});
+
+	it("#given configured mount contains colon #when host-config built #then ambiguous Docker bind is rejected", () => {
+		const result = buildDockerContainerOptions(
+			{
+				...dockerConfig,
+				mounts: [{ hostPath: "/tmp/safe", sandboxPath: "/workspace:ambiguous", mode: "readonly", persist: "host" }],
+			},
+			process.cwd(),
+		);
+
+		expect(result.ok).toBe(false);
+		if (!result.ok) expect(result.error.matchedRule).toBe("docker.binds.no-colon");
+	});
+
+	it("#given extra bind has too many colons #when host-config built #then ambiguous Docker bind is rejected", () => {
+		const result = buildDockerContainerOptions(dockerConfig, process.cwd(), {
+			extraBinds: ["/tmp/a:/workspace/a:ro:Z"],
+		});
+
+		expect(result.ok).toBe(false);
+		if (!result.ok) expect(result.error.matchedRule).toBe("docker.binds.unambiguous-colon-syntax");
 	});
 
 	it("#given hardened host config #when options are built #then adversarial safety controls are fixed", () => {

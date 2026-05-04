@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+import { rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import Dockerode from "dockerode";
@@ -5,9 +7,10 @@ import Dockerode from "dockerode";
 import type { BackendCapability, SandboxControl } from "../../policy/capability.js";
 import type { DockerBackendConfig } from "../../policy/desired.js";
 import type { HealthResult, ProbeResult } from "../../policy/effective.js";
-import type { SandboxBackend, SandboxExecOptions } from "../../sandbox/backend.js";
+import type { SandboxBackend, SandboxExecOptions, SandboxReadFacet, SandboxWriteFacet } from "../../sandbox/backend.js";
 import type { PathMapper } from "../../sandbox/path-mapper.js";
 import { createBlock, type Result, type SandboxFailure } from "../../security/failure.js";
+import { createShellFileFacets } from "../shell-file-facets.js";
 import { buildDockerContainerOptions } from "./host-config.js";
 import { ensureImage } from "./image-pull.js";
 
@@ -22,10 +25,12 @@ export async function createDockerBackend(
 
 class DockerSandboxBackend implements SandboxBackend {
 	public readonly kind = "docker" as const;
-	public readonly capabilities = dockerCapability;
+	public readonly capabilities: BackendCapability;
 	public readonly pathMapper: PathMapper;
 	public readonly lifecycle: DockerLifecycle;
 	public readonly bash = { exec: this.exec.bind(this) };
+	public readonly read: SandboxReadFacet;
+	public readonly write: SandboxWriteFacet;
 	readonly #docker: Dockerode;
 	readonly #config: DockerBackendConfig;
 	readonly #sessionRoot: string;
@@ -34,7 +39,11 @@ class DockerSandboxBackend implements SandboxBackend {
 		this.#docker = docker;
 		this.#config = config;
 		this.#sessionRoot = path.resolve(sessionRoot);
+		this.capabilities = dockerCapability(config);
 		this.pathMapper = new DockerPathMapper(this.#sessionRoot);
+		const fileFacets = createShellFileFacets(this.kind, this.pathMapper, this.bash);
+		this.read = fileFacets.read;
+		this.write = fileFacets.write;
 		this.lifecycle = new DockerLifecycle(this.#docker, this.#config, this);
 	}
 
@@ -141,7 +150,7 @@ class DockerLifecycle {
 			probes.push(await this.runExitProbe("networkDeny", "curl -m 2 https://example.com >/dev/null 2>&1", true));
 		}
 		if (requested.has("fsPathResolution")) {
-			probes.push(await this.runOutputProbe("fsPathResolution", "ls /Users 2>/dev/null || true", ""));
+			probes.push(await this.runMountBoundaryProbe());
 		}
 		if (requested.has("processIsolation")) {
 			probes.push(
@@ -164,18 +173,37 @@ class DockerLifecycle {
 		return failedProbe(control, command, result.value.exitCode, "unexpected probe exit code");
 	}
 
-	private async runOutputProbe(control: SandboxControl, command: string, expected: string): Promise<ProbeResult> {
-		const chunks: Buffer[] = [];
+	private async runMountBoundaryProbe(): Promise<ProbeResult> {
 		const cwd = probeCwd(this.#backend);
-		if (!cwd.ok) return failedProbe(control, command, null, cwd.error.kind);
-		const result = await this.#backend.bash.exec(command, {
-			cwd: cwd.value,
-			onData: (data) => chunks.push(data),
-		});
-		const output = Buffer.concat(chunks).toString("utf8").trim();
-		if (result.ok && output === expected)
-			return { kind: "passed", evidence: `docker probe output matched ${expected}`, control };
-		return failedProbe(control, command, result.ok ? result.value.exitCode : null, output);
+		const command = "test ! -e /workspace/../.pi-sandbox-host-boundary-probe";
+		if (!cwd.ok) return failedProbe("fsPathResolution", command, null, cwd.error.kind);
+		const sentinel = path.join(cwd.value, "..", ".pi-sandbox-host-boundary-probe");
+		try {
+			await writeFile(sentinel, randomUUID(), { encoding: "utf8", flag: "wx" });
+		} catch (cause) {
+			return failedProbe("fsPathResolution", "create-host-boundary-sentinel", null, errorMessage(cause));
+		}
+		try {
+			const result = await this.#backend.bash.exec(command, {
+				cwd: cwd.value,
+				timeoutMs: 10_000,
+			});
+			if (result.ok && result.value.exitCode === 0) {
+				return {
+					kind: "passed",
+					evidence: "host parent sentinel is not visible through /workspace/..",
+					control: "fsPathResolution",
+				};
+			}
+			return failedProbe(
+				"fsPathResolution",
+				command,
+				result.ok ? result.value.exitCode : null,
+				result.ok ? "host parent sentinel was reachable from container" : result.error.remediation,
+			);
+		} finally {
+			await rm(sentinel, { force: true });
+		}
 	}
 
 	private async runOutputContainsProbe(
@@ -228,20 +256,22 @@ class DockerPathMapper implements PathMapper {
 	}
 }
 
-const dockerCapability = {
-	fileRead: false,
-	fileWrite: false,
-	fsPathResolution: "backend-mount-boundary",
-	networkDeny: true,
-	networkAllowlist: false,
-	networkGateway: false,
-	processIsolation: true,
-	envScrub: true,
-	stdoutCapture: "streaming",
-	pathMapping: true,
-	persistence: false,
-	denialAttribution: true,
-} satisfies BackendCapability;
+export function dockerCapability(config: DockerBackendConfig): BackendCapability {
+	return {
+		fileRead: true,
+		fileWrite: true,
+		fsPathResolution: "backend-mount-boundary",
+		networkDeny: config.networkMode === "none",
+		networkAllowlist: false,
+		networkGateway: false,
+		processIsolation: true,
+		envScrub: true,
+		stdoutCapture: "streaming",
+		pathMapping: true,
+		persistence: false,
+		denialAttribution: true,
+	};
+}
 
 async function killContainer(container: Dockerode.Container | null): Promise<void> {
 	if (container === null) return;

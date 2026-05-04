@@ -1,18 +1,20 @@
 import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { access } from "node:fs/promises";
 import path from "node:path";
 
 import type { BackendCapability, SandboxControl } from "../../policy/capability.js";
 import type { QemuBackendConfig } from "../../policy/desired.js";
 import type { HealthResult, ProbeResult } from "../../policy/effective.js";
-import type { SandboxBackend, SandboxExecOptions } from "../../sandbox/backend.js";
+import type { SandboxBackend, SandboxExecOptions, SandboxReadFacet, SandboxWriteFacet } from "../../sandbox/backend.js";
 import type { PathMapper } from "../../sandbox/path-mapper.js";
 import { createBlock, type Result, type SandboxFailure } from "../../security/failure.js";
+import { createShellFileFacets } from "../shell-file-facets.js";
 import { runQemuDoctor } from "./doctor.js";
 import { QEMU_SMOKE_FIXTURE, verifyFixture } from "./smoke-fixture.js";
 
 const DEFAULT_TIMEOUT_MS = 30_000;
-const EXIT_MARKER = "__PI_SANDBOX_EXIT__:";
+const EXIT_MARKER_PREFIX = "__PI_SANDBOX_EXIT_";
 
 type QemuAssets = {
 	readonly kernelPath: string;
@@ -32,6 +34,8 @@ class QemuSandboxBackend implements SandboxBackend {
 	public readonly pathMapper: PathMapper;
 	public readonly lifecycle: QemuLifecycle;
 	public readonly bash = { exec: this.exec.bind(this) };
+	public readonly read: SandboxReadFacet;
+	public readonly write?: SandboxWriteFacet;
 	readonly #config: QemuBackendConfig;
 	readonly #sessionRoot: string;
 	#assets: QemuAssets | null = null;
@@ -41,6 +45,9 @@ class QemuSandboxBackend implements SandboxBackend {
 		this.#sessionRoot = path.resolve(sessionRoot);
 		this.pathMapper = new QemuPathMapper(this.#sessionRoot);
 		this.capabilities = qemuCapability(config);
+		const fileFacets = createShellFileFacets(this.kind, this.pathMapper, this.bash);
+		this.read = fileFacets.read;
+		if (this.capabilities.fileWrite) this.write = fileFacets.write;
 		this.lifecycle = new QemuLifecycle(this, config, this.#sessionRoot);
 	}
 
@@ -63,7 +70,8 @@ class QemuSandboxBackend implements SandboxBackend {
 			sessionRoot: this.#sessionRoot,
 			assets: assets.value,
 		});
-		const child = spawn("qemu-system-x86_64", args, {
+		if (!args.ok) return args;
+		const child = spawn("qemu-system-x86_64", args.value, {
 			detached: true,
 			stdio: ["pipe", "pipe", "pipe"],
 			env: minimalHostEnv(),
@@ -72,6 +80,7 @@ class QemuSandboxBackend implements SandboxBackend {
 		let output = "";
 		let timedOut = false;
 		let abortRequested = false;
+		const exitMarker = `${EXIT_MARKER_PREFIX}${randomUUID().replaceAll("-", "_")}__:`;
 		const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
 		const timeout =
 			timeoutMs > 0
@@ -97,13 +106,7 @@ class QemuSandboxBackend implements SandboxBackend {
 		});
 
 		function writeGuestCommand(): void {
-			const guestCommand = [
-				`cd ${shellQuote(mappedCwd.ok ? mappedCwd.value : "/workspace")}`,
-				`( ${command} )`,
-				"pi_sandbox_exit=$?",
-				`printf '\\n${EXIT_MARKER}%s\\n' "$pi_sandbox_exit"`,
-				"poweroff -f",
-			].join("; ");
+			const guestCommand = buildQemuGuestCommand(command, mappedCwd.ok ? mappedCwd.value : "/workspace", exitMarker);
 			child.stdin.write(`${guestCommand}\n`);
 		}
 
@@ -115,7 +118,7 @@ class QemuSandboxBackend implements SandboxBackend {
 		if (!result.ok) return result;
 		if (timedOut) return { ok: true, value: { exitCode: 124 } };
 		if (abortRequested || options.signal?.aborted) return { ok: true, value: { exitCode: 130 } };
-		const guestExit = guestExitCode(output);
+		const guestExit = guestExitCode(output, exitMarker);
 		return { ok: true, value: { exitCode: guestExit ?? result.value.exitCode } };
 	}
 }
@@ -138,17 +141,32 @@ class QemuLifecycle {
 			return {
 				ok: false,
 				error: qemuFailure(
-					"capability_unsupported",
+					"capability_missing",
 					"lifecycle.init",
 					this.#config.shareMode,
 					"virtiofs requires a managed virtiofsd supervisor; use 9p-readonly for the smoke backend",
 				),
 			};
 		}
-		const assets = await resolveAssets(this.#config, process.cwd());
+		const root = process.cwd();
+		const assets = await resolveAssets(this.#config, root);
 		if (!assets.ok) return assets;
 		this.#backend.setAssets(assets.value);
-		await runQemuDoctor(process.cwd());
+		const doctor = await runQemuDoctor(root);
+		if (!doctor.available) {
+			return {
+				ok: false,
+				error: qemuFailure(
+					"backend_probe_failed",
+					"qemu.doctor",
+					"qemu-system-x86_64",
+					doctor.checks
+						.filter((check) => check.status === "fail")
+						.map((check) => `${check.name}: ${check.details}`)
+						.join("; ") || "QEMU doctor reported not ready",
+				),
+			};
+		}
 		return { ok: true, value: undefined };
 	}
 
@@ -220,12 +238,12 @@ class QemuPathMapper implements PathMapper {
 	}
 }
 
-function qemuCapability(config: QemuBackendConfig): BackendCapability {
+export function qemuCapability(config: QemuBackendConfig): BackendCapability {
 	return {
 		fileRead: true,
 		fileWrite: config.shareMode.endsWith("readwrite"),
 		fsPathResolution: "backend-mount-boundary",
-		networkDeny: true,
+		networkDeny: config.network === "none",
 		networkAllowlist: false,
 		networkGateway: false,
 		processIsolation: true,
@@ -269,11 +287,22 @@ async function resolveAssets(config: QemuBackendConfig, root: string): Promise<R
 	return { ok: true, value: { kernelPath, initrdPath } };
 }
 
-function qemuArgs(options: {
+export function qemuArgs(options: {
 	readonly config: QemuBackendConfig;
 	readonly sessionRoot: string;
 	readonly assets: QemuAssets;
-}): readonly string[] {
+}): Result<readonly string[], SandboxFailure> {
+	if (options.sessionRoot.includes(",")) {
+		return {
+			ok: false,
+			error: qemuFailure(
+				"sandbox_backend_error",
+				"qemu.args",
+				options.sessionRoot,
+				"QEMU session root cannot contain comma because -virtfs option parsing is comma-delimited",
+			),
+		};
+	}
 	const readonlyFlag = options.config.shareMode.endsWith("readonly") ? ",readonly=on" : "";
 	const args = [
 		"-m",
@@ -288,15 +317,26 @@ function qemuArgs(options: {
 		options.assets.kernelPath,
 		"-initrd",
 		options.assets.initrdPath,
-		"-append",
-		QEMU_SMOKE_FIXTURE.recommendedAppend,
 		"-virtfs",
 		`local,path=${options.sessionRoot},mount_tag=workspace,security_model=mapped-xattr${readonlyFlag}`,
 	];
+	if (options.config.assets.kind === "smoke") args.push("-append", QEMU_SMOKE_FIXTURE.recommendedAppend);
 	if (options.config.network === "none") args.push("-nic", "none");
 	else args.push("-netdev", "user,id=net0", "-device", "virtio-net-pci,netdev=net0");
 	if (options.config.snapshot) args.push("-snapshot");
-	return args;
+	return { ok: true, value: args };
+}
+
+export function buildQemuGuestCommand(command: string, cwd: string, exitMarker: string): string {
+	const encodedCommand = Buffer.from(command, "utf8").toString("base64");
+	return [
+		`cd ${shellQuote(cwd)}`,
+		`pi_sandbox_command_base64=${shellQuote(encodedCommand)}`,
+		"printf '%s' \"$pi_sandbox_command_base64\" | base64 -d | sh",
+		"pi_sandbox_exit=$?",
+		`printf '\\n${exitMarker}%s\\n' "$pi_sandbox_exit"`,
+		"poweroff -f",
+	].join("; ");
 }
 
 function waitForQemu(
@@ -350,10 +390,10 @@ function minimalHostEnv(): NodeJS.ProcessEnv {
 	};
 }
 
-function guestExitCode(output: string): number | null {
-	const markerIndex = output.lastIndexOf(EXIT_MARKER);
+function guestExitCode(output: string, marker: string): number | null {
+	const markerIndex = output.lastIndexOf(marker);
 	if (markerIndex < 0) return null;
-	const rest = output.slice(markerIndex + EXIT_MARKER.length);
+	const rest = output.slice(markerIndex + marker.length);
 	const match = /^(?<code>\d+)/.exec(rest.trimStart());
 	if (match?.groups?.code === undefined) return null;
 	return Number.parseInt(match.groups.code, 10);
@@ -401,7 +441,7 @@ function failedProbe(control: SandboxControl, command: string, exitCode: number 
 }
 
 function qemuFailure(
-	code: "dependency_missing" | "backend_probe_failed" | "sandbox_backend_error" | "capability_unsupported",
+	code: "dependency_missing" | "backend_probe_failed" | "sandbox_backend_error" | "capability_missing",
 	operation: string,
 	target: string,
 	message: string,
@@ -419,7 +459,7 @@ function qemuFailure(
 		remediation: message,
 		...(code === "dependency_missing"
 			? { dependency: target }
-			: code === "capability_unsupported"
+			: code === "capability_missing"
 				? { control: "fsPathResolution" }
 				: code === "backend_probe_failed"
 					? { probeName: operation, probeOutput: message }

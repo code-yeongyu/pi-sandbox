@@ -6,9 +6,10 @@ import path from "node:path";
 import type { BackendCapability, SandboxControl } from "../../policy/capability.js";
 import type { FilePolicy, NativeBackendConfig } from "../../policy/desired.js";
 import type { HealthResult, ProbeResult } from "../../policy/effective.js";
-import type { SandboxBackend, SandboxExecOptions } from "../../sandbox/backend.js";
+import type { SandboxBackend, SandboxExecOptions, SandboxReadFacet, SandboxWriteFacet } from "../../sandbox/backend.js";
 import type { PathMapper } from "../../sandbox/path-mapper.js";
 import { createBlock, type Result, type SandboxFailure } from "../../security/failure.js";
+import { createShellFileFacets } from "../shell-file-facets.js";
 import { generateSbplProfile } from "./darwin-sbpl.js";
 
 const SANDBOX_EXECUTABLE_NAME = "sandbox-exec";
@@ -21,7 +22,7 @@ export async function createDarwinSandboxExecBackend(
 	sessionRoot: string,
 ): Promise<Result<SandboxBackend, SandboxFailure>> {
 	if (config.platform !== "darwin" || config.mechanism !== "sandbox-exec") {
-		return { ok: false, error: backendUnavailable("native config is not darwin sandbox-exec", "config-mismatch") };
+		return { ok: false, error: backendMissing("native config is not darwin sandbox-exec", "config-mismatch") };
 	}
 	return {
 		ok: true,
@@ -39,10 +40,15 @@ class DarwinSandboxExecBackend implements SandboxBackend {
 	public readonly pathMapper: PathMapper = identityPathMapper;
 	public readonly lifecycle = new DarwinSandboxExecLifecycle(this);
 	public readonly bash = { exec: this.exec.bind(this) };
+	public readonly read: SandboxReadFacet;
+	public readonly write: SandboxWriteFacet;
 	public readonly sessionRoot: string;
 
 	public constructor(options: BackendOptions) {
 		this.sessionRoot = path.resolve(options.sessionRoot);
+		const fileFacets = createShellFileFacets(this.kind, this.pathMapper, this.bash);
+		this.read = fileFacets.read;
+		this.write = fileFacets.write;
 	}
 
 	public async exec(
@@ -90,7 +96,7 @@ class DarwinSandboxExecLifecycle {
 
 	public async init(): Promise<Result<void, SandboxFailure>> {
 		if (process.platform !== "darwin")
-			return { ok: false, error: backendUnavailable("host is not macOS", process.platform) };
+			return { ok: false, error: backendMissing("host is not macOS", process.platform) };
 		const available = await whichSandboxExec();
 		if (!available.ok) return available;
 		await mkdir(this.#backend.sessionRoot, { recursive: true });
@@ -106,7 +112,7 @@ class DarwinSandboxExecLifecycle {
 	}
 
 	public async dispose(): Promise<void> {
-		await mkdir(this.#backend.sessionRoot, { recursive: true });
+		return undefined;
 	}
 
 	public async health(): Promise<HealthResult> {
@@ -301,7 +307,7 @@ async function probeFileWrite(sessionRoot: string): Promise<ProbeResult> {
 	};
 }
 
-const darwinSandboxExecCapability = {
+export const darwinSandboxExecCapability = {
 	fileRead: true,
 	fileWrite: true,
 	fsPathResolution: "realpath-canonical-residual-toctou",
@@ -321,11 +327,11 @@ export const darwinSandboxExecEffectiveControls = {
 	fileWrite: { state: "enforced", reason: "SBPL file-write* profile rules" },
 	fsPathResolution: { state: "enforced", reason: "host realpath canonicalization has residual TOCTOU risk" },
 	networkDeny: { state: "enforced", reason: "SBPL network* deny rule" },
-	networkAllowlist: { state: "unsupported", reason: "SBPL has no native domain allowlist" },
+	networkAllowlist: { state: "omitted", reason: "SBPL has no native domain allowlist" },
 	processIsolation: { state: "simulated", reason: "seatbelt is not a PID/process namespace" },
 	envScrub: { state: "enforced", reason: "spawn environment is explicit" },
 	stdoutCapture: { state: "enforced", reason: "stdout and stderr are streamed" },
-	pathMapping: { state: "unsupported", reason: "macOS native paths are identity mapped" },
+	pathMapping: { state: "omitted", reason: "macOS native paths are identity mapped" },
 	persistence: { state: "enforced", reason: "host filesystem roots persist" },
 	denialAttribution: { state: "enforced", reason: "sandbox-exec SIGKILL/nonzero denial mapping" },
 } as const;
@@ -417,10 +423,10 @@ function shellQuote(value: string): string {
 	return `'${value.replaceAll("'", "'\\''")}'`;
 }
 
-function backendUnavailable(message: string, reason: string): SandboxFailure {
+function backendMissing(message: string, reason: string): SandboxFailure {
 	return createBlock({
 		version: 1,
-		code: "backend_unavailable",
+		code: "backend_missing",
 		policyArea: "backend",
 		operation: "backend.init",
 		sanitizedTarget: "sandbox-exec",

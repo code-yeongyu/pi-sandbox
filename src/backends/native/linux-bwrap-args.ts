@@ -13,6 +13,7 @@ export type BwrapPolicy = {
 
 const BASE_SYSTEM_BINDS = ["/usr", "/bin", "/sbin", "/lib", "/lib64"] as const;
 const PROC_MAGIC_LINK_PATTERN = /^\/proc\/(?:self|thread-self|\d+)(?:\/|$)/;
+const UNSAFE_EXACT_BIND_ROOTS = new Set(["/", "/proc", "/sys", "/dev", "/var/run"]);
 
 export function buildBwrapArgs(policy: BwrapPolicy): readonly string[] {
 	assertSafePath(policy.cwd, policy.file.denyMagicLinks, "cwd");
@@ -53,6 +54,9 @@ function normalizeAbsolutePath(input: string): string {
 
 function assertSafePath(input: string, denyMagicLinks: boolean, label: string): void {
 	const normalized = normalizeAbsolutePath(input);
+	if (UNSAFE_EXACT_BIND_ROOTS.has(normalized)) {
+		throw new Error(`Refusing to bind unsafe ${label} root: ${normalized}`);
+	}
 	if (denyMagicLinks && (normalized === "/proc" || PROC_MAGIC_LINK_PATTERN.test(normalized))) {
 		throw new Error(`Refusing to bind ${label} through proc magic-link path: ${normalized}`);
 	}

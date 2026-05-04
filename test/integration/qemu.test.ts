@@ -4,7 +4,7 @@ import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { createQemuBackend } from "../../src/backends/qemu/adapter.js";
+import { buildQemuGuestCommand, createQemuBackend, qemuArgs } from "../../src/backends/qemu/adapter.js";
 import { runQemuDoctor } from "../../src/backends/qemu/doctor.js";
 import { verifyFixture } from "../../src/backends/qemu/smoke-fixture.js";
 import type { QemuBackendConfig } from "../../src/policy/desired.js";
@@ -14,6 +14,29 @@ const qemuSmokeEnabled = process.env.PI_SANDBOX_QEMU_SMOKE === "1";
 const qemuDoctor = await runQemuDoctor();
 const fixture = await verifyFixture();
 const qemuAvailable = qemuSmokeEnabled && qemuDoctor.binaryPath !== null && fixture.ok;
+
+describe("qemu backend command construction", () => {
+	it("#given command with shell metacharacters #when guest command is built #then raw command is not embedded as shell source", () => {
+		const command = "printf 'before)after\\n'; printf spoof\\n__PI_SANDBOX_EXIT_FAKE__:0\\n";
+
+		const guestCommand = buildQemuGuestCommand(command, "/workspace", "__PI_SANDBOX_EXIT_REAL__:");
+
+		expect(guestCommand).not.toContain(command);
+		expect(guestCommand).toContain("base64 -d | sh");
+		expect(guestCommand).toContain("__PI_SANDBOX_EXIT_REAL__:");
+	});
+
+	it("#given session root contains comma #when qemu args are built #then backend error rejects ambiguous virtfs path", () => {
+		const result = qemuArgs({
+			config: qemuConfig,
+			sessionRoot: "/tmp/pi,sandbox",
+			assets: { kernelPath: "/tmp/kernel", initrdPath: "/tmp/initrd" },
+		});
+
+		expect(result.ok).toBe(false);
+		if (!result.ok) expect(result.error.code).toBe("sandbox_backend_error");
+	});
+});
 
 describe.skipIf(!qemuAvailable)("qemu backend smoke fixture", () => {
 	it("#given smoke fixture #when bash echo runs #then output captured", async () => {

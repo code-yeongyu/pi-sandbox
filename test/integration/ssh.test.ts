@@ -2,7 +2,7 @@ import { spawnSync } from "node:child_process";
 
 import { describe, expect, it } from "vitest";
 
-import { createSshBackend } from "../../src/backends/ssh/adapter.js";
+import { createSshBackend, sshCapability } from "../../src/backends/ssh/adapter.js";
 import type { SshBackendConfig } from "../../src/policy/desired.js";
 
 type SshTestEnv =
@@ -17,6 +17,12 @@ type SshTestEnv =
 
 const sshTestEnv = readSshTestEnv();
 const describeSsh = sshTestEnv.available ? describe : describe.skip;
+
+describe("ssh backend capabilities", () => {
+	it("#given no project synchronization #when capability is reported #then persistence is false", () => {
+		expect(sshCapability.persistence).toBe(false);
+	});
+});
 
 describeSsh("ssh backend integration", () => {
 	it("#given valid key auth #when bash ls runs #then output captured + exit 0", async () => {
@@ -99,7 +105,6 @@ function baseConfig(
 		auth: { kind: "privateKey", keyPath: env.keyPath },
 		hostVerification,
 		remoteRoot: "/tmp",
-		sync: "sftp",
 		proxyJump: [],
 	};
 }

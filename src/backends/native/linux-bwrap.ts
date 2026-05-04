@@ -4,9 +4,10 @@ import path from "node:path";
 import type { BackendCapability, SandboxControl } from "../../policy/capability.js";
 import type { FilePolicy, NativeBackendConfig, NetworkPolicy } from "../../policy/desired.js";
 import type { HealthResult, ProbeResult } from "../../policy/effective.js";
-import type { SandboxBackend, SandboxExecOptions } from "../../sandbox/backend.js";
+import type { SandboxBackend, SandboxExecOptions, SandboxReadFacet, SandboxWriteFacet } from "../../sandbox/backend.js";
 import type { PathMapper } from "../../sandbox/path-mapper.js";
 import { createBlock, type Result, type SandboxFailure } from "../../security/failure.js";
+import { createShellFileFacets } from "../shell-file-facets.js";
 import { buildBwrapArgs } from "./linux-bwrap-args.js";
 
 const BWRAP_BINARY = "bwrap";
@@ -39,10 +40,15 @@ class LinuxBwrapBackend implements SandboxBackend {
 	public readonly pathMapper: PathMapper = new IdentityPathMapper();
 	public readonly lifecycle = new LinuxBwrapLifecycle();
 	public readonly bash = { exec: this.exec.bind(this) };
+	public readonly read: SandboxReadFacet;
+	public readonly write: SandboxWriteFacet;
 	readonly #sessionRoot: string;
 
 	public constructor(sessionRoot: string) {
 		this.#sessionRoot = path.resolve(sessionRoot);
+		const fileFacets = createShellFileFacets(this.kind, this.pathMapper, this.bash);
+		this.read = fileFacets.read;
+		this.write = fileFacets.write;
 	}
 
 	public async exec(
@@ -108,7 +114,7 @@ class LinuxBwrapLifecycle {
 				if (control === "fileWrite") return fileWriteProbe();
 				if (control === "processIsolation") return processIsolationProbe();
 				if (control === "fsPathResolution") return magicLinkDenyProbe();
-				return unsupportedProbe(control);
+				return omittedProbe(control);
 			}),
 		);
 		return probes;
@@ -364,13 +370,13 @@ async function magicLinkDenyProbe(): Promise<ProbeResult> {
 	return failedProbe("fsPathResolution", "bwrap proc magic-link", result, "Expected /proc/self/mem read to fail.");
 }
 
-function unsupportedProbe(control: SandboxControl): ProbeResult {
+function omittedProbe(control: SandboxControl): ProbeResult {
 	return {
 		kind: "failed",
 		command: "bwrap probe",
 		exitCode: null,
-		reason: "probe-not-implemented-for-control",
-		fixHint: "Request a Linux bwrap control probe implemented by this backend.",
+		reason: "probe-not-available-for-control",
+		fixHint: "Request a Linux bwrap control probe provided by this backend.",
 		control,
 	};
 }
@@ -513,7 +519,7 @@ function backendError(message: string): SandboxFailure {
 
 const bwrapProbeControls = ["networkDeny", "fileWrite", "processIsolation", "fsPathResolution"] as const;
 
-const linuxBwrapCapability = {
+export const linuxBwrapCapability = {
 	fileRead: true,
 	fileWrite: true,
 	fsPathResolution: "backend-mount-boundary",

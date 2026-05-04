@@ -59,11 +59,14 @@ function buildBinds(
 	extraBinds: readonly string[],
 ): Result<string[], SandboxFailure> {
 	const sessionBind = bindFromParts(path.resolve(sessionRoot), WORKSPACE_PATH, "readwrite");
-	const configuredBinds: string[] = [sessionBind];
+	if (!sessionBind.ok) return sessionBind;
+	const configuredBinds: string[] = [sessionBind.value];
 	for (const mount of mounts) {
 		const safety = validateMount(mount.hostPath, mount.sandboxPath);
 		if (!safety.ok) return safety;
-		configuredBinds.push(bindFromParts(path.resolve(mount.hostPath), mount.sandboxPath, mount.mode));
+		const bind = bindFromParts(path.resolve(mount.hostPath), mount.sandboxPath, mount.mode);
+		if (!bind.ok) return bind;
+		configuredBinds.push(bind.value);
 	}
 	for (const bind of extraBinds) {
 		const safety = validateBindString(bind);
@@ -87,6 +90,9 @@ function buildTmpfs(configuredTmpfs: readonly string[]): { readonly [directory: 
 
 function validateMount(hostPath: string, sandboxPath: string): Result<void, SandboxFailure> {
 	const resolvedHostPath = path.resolve(hostPath);
+	if (resolvedHostPath.includes(":")) return unsafeBindFailure(resolvedHostPath, "docker.binds.no-colon");
+	if (sandboxPath.includes(":"))
+		return unsafeBindFailure(`${resolvedHostPath}:${sandboxPath}`, "docker.binds.no-colon");
 	if (isUnsafeHostPath(resolvedHostPath)) return unsafeBindFailure(resolvedHostPath);
 	if (sandboxPath === "/" || sandboxPath === "/Users" || sandboxPath.startsWith("/Users/")) {
 		return unsafeBindFailure(`${resolvedHostPath}:${sandboxPath}`);
@@ -95,8 +101,13 @@ function validateMount(hostPath: string, sandboxPath: string): Result<void, Sand
 }
 
 function validateBindString(bind: string): Result<void, SandboxFailure> {
-	const hostPath = bind.split(":")[0] ?? "";
-	return validateMount(hostPath, bind.split(":")[1] ?? "/");
+	const parts = bind.split(":");
+	if (parts.length < 2 || parts.length > 3) return unsafeBindFailure(bind, "docker.binds.unambiguous-colon-syntax");
+	const [hostPath, sandboxPath] = parts;
+	if (hostPath === undefined || sandboxPath === undefined || hostPath.length === 0 || sandboxPath.length === 0) {
+		return unsafeBindFailure(bind, "docker.binds.unambiguous-colon-syntax");
+	}
+	return validateMount(hostPath, sandboxPath);
 }
 
 function isUnsafeHostPath(resolvedHostPath: string): boolean {
@@ -107,16 +118,26 @@ function isUnsafeHostPath(resolvedHostPath: string): boolean {
 	return UNSAFE_HOST_PREFIXES.some((prefix) => resolvedHostPath.startsWith(prefix));
 }
 
-function bindFromParts(hostPath: string, sandboxPath: string, mode: SandboxMount["mode"]): string {
+function bindFromParts(
+	hostPath: string,
+	sandboxPath: string,
+	mode: SandboxMount["mode"],
+): Result<string, SandboxFailure> {
+	if (hostPath.includes(":")) return unsafeBindFailure<string>(hostPath, "docker.binds.no-colon");
+	if (sandboxPath.includes(":"))
+		return unsafeBindFailure<string>(`${hostPath}:${sandboxPath}`, "docker.binds.no-colon");
 	const access = mode === "readonly" ? "ro" : "rw";
-	return `${hostPath}:${path.posix.normalize(sandboxPath)}:${access}`;
+	return { ok: true, value: `${hostPath}:${path.posix.normalize(sandboxPath)}:${access}` };
 }
 
 function envMapToDocker(env: ReadonlyMap<string, string>): string[] {
 	return [...env.entries()].map(([name, value]) => `${name}=${value}`);
 }
 
-function unsafeBindFailure(target: string): Result<void, SandboxFailure> {
+function unsafeBindFailure<TValue = void>(
+	target: string,
+	matchedRule = "docker.binds.safe-host-paths",
+): Result<TValue, SandboxFailure> {
 	return {
 		ok: false,
 		error: createBlock({
@@ -125,7 +146,7 @@ function unsafeBindFailure(target: string): Result<void, SandboxFailure> {
 			policyArea: "backend",
 			operation: "docker.host-config",
 			sanitizedTarget: target,
-			matchedRule: "docker.binds.safe-host-paths",
+			matchedRule,
 			backend: "docker",
 			policyHash: "uninitialized",
 			policyRevision: 0,

@@ -9,12 +9,12 @@ export function toJustbashNetworkConfig(
 ): Result<NetworkConfig | undefined, SandboxFailure> {
 	if (policy === undefined || policy.mode === "deny") return { ok: true, value: undefined };
 	if (policy.mode === "allow-all") return { ok: true, value: { dangerouslyAllowFullInternetAccess: true } };
-	if (hasUnsupportedRestrictedFields(policy)) {
+	if (hasOmittedRestrictedFields(policy)) {
 		return {
 			ok: false,
 			error: createBlock({
 				version: 1,
-				code: "capability_unsupported",
+				code: "capability_missing",
 				policyArea: "network",
 				operation: "network.configure",
 				sanitizedTarget: "restricted-network-policy",
@@ -36,7 +36,7 @@ export function toJustbashNetworkConfig(
 	};
 }
 
-function hasUnsupportedRestrictedFields(policy: Extract<NetworkPolicy, { readonly mode: "restricted" }>): boolean {
+function hasOmittedRestrictedFields(policy: Extract<NetworkPolicy, { readonly mode: "restricted" }>): boolean {
 	return (
 		policy.allowDomains.length > 0 ||
 		policy.denyDomains.length > 0 ||

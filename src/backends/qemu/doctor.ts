@@ -42,7 +42,7 @@ export async function runQemuDoctor(root: string = process.cwd()): Promise<QemuD
 		name: "accelerator",
 		status: accelerator === "tcg" ? "warn" : "pass",
 		details:
-			accelerator === "tcg" ? "KVM/HVF unavailable; QEMU will use software emulation" : `${accelerator} available`,
+			accelerator === "tcg" ? "KVM/HVF not active; QEMU will use software emulation" : `${accelerator} available`,
 	});
 
 	const fixture = await verifyFixture(root);

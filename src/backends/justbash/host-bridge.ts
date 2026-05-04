@@ -24,7 +24,7 @@ async function runHostBinary(options: {
 }): Promise<{ readonly stdout: string; readonly stderr: string; readonly exitCode: number }> {
 	return new Promise((resolve) => {
 		const child = spawn(options.name, [...options.args], {
-			cwd: process.cwd(),
+			cwd: options.cwd,
 			env: Object.fromEntries(buildEnv(options.envPolicy, process.env)),
 			stdio: ["pipe", "pipe", "pipe"],
 		});

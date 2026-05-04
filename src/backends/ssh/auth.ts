@@ -91,10 +91,7 @@ export function buildConnectConfig(backendConfig: SshBackendConfig): Result<Conn
 			case "v1":
 				return {
 					ok: false,
-					error: invalidConfig(
-						"ssh-v1-unsupported-insecure",
-						"SSHv1 is unsupported because it is cryptographically insecure; use SSHv2.",
-					),
+					error: invalidConfig("ssh-v1-deprecated-insecure", "SSHv1 is cryptographically insecure; use SSHv2."),
 				};
 		}
 	} catch (cause) {

@@ -2,8 +2,45 @@ import { spawn } from "node:child_process";
 
 import { describe, expect, it } from "vitest";
 
+import { type BwrapPolicy, buildBwrapArgs } from "../../src/backends/native/linux-bwrap-args.js";
+
 const bwrapAvailability = await checkBwrapAvailability();
 const describeWhenBwrapAvailable = bwrapAvailability.available ? describe : describe.skip;
+
+describe("native linux bwrap argument hardening", () => {
+	it("#given session root is filesystem root #when args are built #then unsafe bind is rejected", () => {
+		expect(() => buildBwrapArgs({ ...baseBwrapPolicy, sessionRoot: "/" })).toThrow("unsafe sessionRoot root");
+	});
+
+	it("#given file root is /proc and magic links disabled #when args are built #then sensitive root is still rejected", () => {
+		expect(() =>
+			buildBwrapArgs({
+				...baseBwrapPolicy,
+				file: {
+					...baseBwrapPolicy.file,
+					denyMagicLinks: false,
+					roots: [
+						{
+							path: "/proc",
+							read: true,
+							write: false,
+							create: false,
+							delete: false,
+							persist: "host",
+							followSymlinks: false,
+						},
+					],
+				},
+			}),
+		).toThrow("unsafe file root root");
+	});
+
+	it("#given allowed executable is /dev #when args are built #then sensitive root is rejected", () => {
+		expect(() => buildBwrapArgs({ ...baseBwrapPolicy, allowedExecutables: ["/dev"] })).toThrow(
+			"unsafe allowed executable root",
+		);
+	});
+});
 
 describeWhenBwrapAvailable("native linux bwrap integration", () => {
 	it("#given network deny #when curl attempted #then non-zero exit", async () => {
@@ -97,6 +134,33 @@ describeWhenBwrapAvailable("native linux bwrap integration", () => {
 		expect(result.stderr).toMatch(/Permission denied|Input\/output error|Operation not permitted/i);
 	});
 });
+
+const baseBwrapPolicy: BwrapPolicy = {
+	network: { mode: "deny" },
+	file: {
+		defaultRead: "deny",
+		defaultWrite: "deny",
+		roots: [
+			{
+				path: "/tmp/pi-sandbox-bwrap-root",
+				read: true,
+				write: true,
+				create: true,
+				delete: false,
+				persist: "host",
+				followSymlinks: false,
+			},
+		],
+		denySpecialPaths: ["/proc", "/sys", "/dev"],
+		denyMagicLinks: true,
+		highRiskWriteClasses: [],
+		maxReadBytes: 1024,
+	},
+	cwd: "/tmp/pi-sandbox-bwrap-root",
+	env: new Map(),
+	allowedExecutables: [],
+	sessionRoot: "/tmp/pi-sandbox-bwrap-root",
+};
 
 type CommandResult = {
 	readonly exitCode: number | null;
