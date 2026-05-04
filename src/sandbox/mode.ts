@@ -24,7 +24,7 @@ export const SandboxModeSchema = z.discriminatedUnion("kind", [
 		.readonly(),
 	z
 		.object({
-			kind: z.literal("unavailable"),
+			kind: z.literal("missing"),
 			reason: z.string(),
 			backend: BackendKindSchema.optional(),
 		})
@@ -40,4 +40,4 @@ export type SandboxMode =
 			readonly scope: "session" | "project";
 			readonly visibleReason: string;
 	  }
-	| { readonly kind: "unavailable"; readonly reason: string; readonly backend?: BackendKind };
+	| { readonly kind: "missing"; readonly reason: string; readonly backend?: BackendKind };

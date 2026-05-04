@@ -18,7 +18,7 @@ export class BackendRegistry {
 				ok: false,
 				error: createBlock({
 					version: 1,
-					code: "backend_unavailable",
+					code: "backend_missing",
 					policyArea: "backend",
 					operation: "backend.resolve",
 					sanitizedTarget: "auto",
@@ -37,7 +37,7 @@ export class BackendRegistry {
 				ok: false,
 				error: createBlock({
 					version: 1,
-					code: "backend_unavailable",
+					code: "backend_missing",
 					policyArea: "backend",
 					operation: "backend.resolve",
 					sanitizedTarget: config.kind,

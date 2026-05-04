@@ -64,7 +64,7 @@ export function makeEffectivePolicy(overrides: Partial<EffectivePolicy> = {}): E
 				persistence: { state: "enforced" },
 				denialAttribution: { state: "enforced" },
 			},
-			unsupportedControls: [],
+			omittedControls: [],
 			probeResults: [],
 			diagnostics: [],
 		},

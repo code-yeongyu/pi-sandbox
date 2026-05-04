@@ -8,7 +8,7 @@ export const FsPathResolutionSchema = z.enum([
 	"kernel-openat2",
 	"backend-mount-boundary",
 	"realpath-canonical-residual-toctou",
-	"unsupported",
+	"not-provided",
 ]);
 
 export const BackendCapabilitySchema = z

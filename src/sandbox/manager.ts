@@ -19,6 +19,7 @@ export class SandboxManager {
 	#effectivePolicy: EffectivePolicy;
 	readonly #redactor: StreamingRedactor;
 	#backend: SandboxBackend | null = null;
+	readonly #backendConfig: DesiredBackendConfig;
 	#promptHandler: PromptHandler | null;
 	#blockHandler: ((block: SandboxFailure) => void) | null = null;
 	#cwd: string | null;
@@ -29,20 +30,33 @@ export class SandboxManager {
 	public constructor(
 		registry: BackendRegistry,
 		effectivePolicy: EffectivePolicy,
-		options: { readonly promptHandler?: PromptHandler | null; readonly cwd?: string } = {},
+		options: {
+			readonly promptHandler?: PromptHandler | null;
+			readonly cwd?: string;
+			readonly backendConfig?: DesiredBackendConfig;
+		} = {},
 	) {
 		this.#registry = registry;
 		this.#effectivePolicy = effectivePolicy;
+		this.#backendConfig = options.backendConfig ?? defaultJustbashBackendConfig;
 		this.#redactor = createStreamingRedactor(process.env);
 		this.#promptHandler = options.promptHandler ?? null;
 		this.#cwd = options.cwd ?? null;
 	}
 
 	public async init(): Promise<Result<void, SandboxFailure>> {
-		const result = await this.#registry.resolve(defaultBackendConfig(this.#effectivePolicy.backend.kind));
+		const invariant = validateBackendConfigMatchesPolicy(this.#backendConfig, this.#effectivePolicy);
+		if (!invariant.ok) return invariant;
+		const capabilityInvariant = validatePolicyCapabilities(this.#effectivePolicy);
+		if (!capabilityInvariant.ok) return capabilityInvariant;
+		const result = await this.#registry.resolve(this.#backendConfig);
 		if (!result.ok) return result;
 		this.#backend = result.value;
 		return result.value.lifecycle.init();
+	}
+
+	public getDesiredBackendConfig(): DesiredBackendConfig {
+		return this.#backendConfig;
 	}
 
 	public async dispose(): Promise<void> {
@@ -190,7 +204,7 @@ function createPromptBlock(
 function loadFailure(kind: string, effectivePolicy: EffectivePolicy): SandboxFailure {
 	return createBlock({
 		version: 1,
-		code: "backend_unavailable",
+		code: "backend_missing",
 		policyArea: "backend",
 		operation: "config.load",
 		sanitizedTarget: kind,
@@ -222,52 +236,69 @@ function createTypedGrantBlock(
 	});
 }
 
-function defaultBackendConfig(kind: EffectivePolicy["backend"]["kind"]): DesiredBackendConfig {
-	if (kind === "justbash") {
+const defaultJustbashBackendConfig: DesiredBackendConfig = {
+	kind: "justbash",
+	fs: "memory",
+	allowedBinaries: [],
+	executionLimits: { maxOutputBytes: 1024 * 1024, maxRuntimeMs: 30_000 },
+};
+
+function validateBackendConfigMatchesPolicy(
+	backendConfig: DesiredBackendConfig,
+	effectivePolicy: EffectivePolicy,
+): Result<void, SandboxFailure> {
+	if (backendConfig.kind === "auto") {
 		return {
-			kind: "justbash",
-			fs: "memory",
-			allowedBinaries: [],
-			allowedLibraries: [],
-			executionLimits: { maxOutputBytes: 1024 * 1024, maxRuntimeMs: 30_000 },
+			ok: false,
+			error: backendConfigMismatchFailure("auto", effectivePolicy.backend.kind),
 		};
 	}
-	if (kind === "docker") {
-		return {
-			kind: "docker",
-			image: "node:22-alpine",
-			networkMode: "none",
-			readonlyRootfs: true,
-			mounts: [],
-			pullPolicy: "if-missing",
-			capDrop: ["ALL"],
-			securityOpt: ["no-new-privileges"],
-			tmpfs: [],
-		};
-	}
-	if (kind === "native") return { kind: "native", platform: "linux", mechanism: "bwrap" };
-	if (kind === "qemu") {
-		return {
-			kind: "qemu",
-			assets: { kind: "smoke", fixtureName: "default", checksumSha256: "unset" },
-			cpus: 1,
-			memoryMb: 512,
-			shareMode: "9p-readonly",
-			network: "none",
-			snapshot: true,
-		};
+	if (backendConfig.kind === effectivePolicy.backend.kind) return { ok: true, value: undefined };
+	return {
+		ok: false,
+		error: backendConfigMismatchFailure(backendConfig.kind, effectivePolicy.backend.kind),
+	};
+}
+
+function validatePolicyCapabilities(effectivePolicy: EffectivePolicy): Result<void, SandboxFailure> {
+	if (
+		effectivePolicy.network.mode !== "restricted" ||
+		(effectivePolicy.backend.capabilities.networkAllowlist && effectivePolicy.backend.capabilities.networkGateway)
+	) {
+		return { ok: true, value: undefined };
 	}
 	return {
-		kind: "ssh",
-		host: "localhost",
-		port: 22,
-		username: "sandbox",
-		auth: { kind: "kbi" },
-		hostVerification: { strict: true },
-		remoteRoot: "/tmp/pi-sandbox",
-		sync: "sftp",
-		proxyJump: [],
+		ok: false,
+		error: createBlock({
+			version: 1,
+			code: "capability_missing",
+			policyArea: "network",
+			operation: "backend.init",
+			sanitizedTarget: "network.mode=restricted",
+			matchedRule: "network.restricted.requires-gateway",
+			backend: effectivePolicy.backend.kind,
+			policyHash: effectivePolicy.desiredPolicyHash,
+			policyRevision: effectivePolicy.policyRevision,
+			remediation: "Use a backend with restricted network gateway support or change network.mode to deny/allow-all.",
+			control: "networkAllowlist",
+		}),
 	};
+}
+
+function backendConfigMismatchFailure(actual: string, expected: string): SandboxFailure {
+	return createBlock({
+		version: 1,
+		code: "backend_missing",
+		policyArea: "backend",
+		operation: "backend.init",
+		sanitizedTarget: actual,
+		matchedRule: "backend.config.policy-kind-mismatch",
+		backend: expected,
+		policyHash: "uninitialized",
+		policyRevision: 0,
+		remediation: `Initialize ${expected} with a matching concrete backend config.`,
+		availabilityReason: "backend-config-policy-kind-mismatch",
+	});
 }
 
 function policyAreaForPromptClass(promptClass: string): "file.write" | "network" | "process" {

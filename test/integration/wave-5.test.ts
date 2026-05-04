@@ -92,7 +92,7 @@ function createUi(confirmResult: boolean, notifications: Notification[] = []): E
 		setHeader: () => undefined,
 		setTitle: () => undefined,
 		custom: async () => {
-			throw new Error("custom UI is not implemented in tests");
+			throw new Error("custom UI is not available in test harness");
 		},
 		pasteToEditor: () => undefined,
 		setEditorText: () => undefined,
@@ -104,7 +104,7 @@ function createUi(confirmResult: boolean, notifications: Notification[] = []): E
 		theme: undefined as never,
 		getAllThemes: () => [],
 		getTheme: () => undefined,
-		setTheme: () => ({ success: false, error: "not implemented" }),
+		setTheme: () => ({ success: false, error: "not available in test harness" }),
 		getToolsExpanded: () => false,
 		setToolsExpanded: () => undefined,
 	};
@@ -232,7 +232,7 @@ describe("Wave 5 approvals and TUI", () => {
 			backend: justbash (available)
 			file: read=enforced write=enforced
 			network: deny allowlist=enforced
-			unsupported controls: none
+			omitted controls: none
 			policy: desired1234567890 revision=7
 			last block: network https://example.com/path network.mode=deny
 			policy hash prefix: desired1
@@ -250,7 +250,7 @@ describe("Wave 5 approvals and TUI", () => {
 		const block = makeBlock();
 
 		expect(toTuiFooter(policy, mode)).toMatchInlineSnapshot(
-			`"sandbox enforcing justbash fs=realpath-canonical-residual-toctou net=deny unsupported=0 grants=grant123 rev=7:desired1"`,
+			`"sandbox enforcing justbash fs=realpath-canonical-residual-toctou net=deny omitted=0 grants=grant123 rev=7:desired1"`,
 		);
 		expect(toTuiWidget(policy, mode, block)).toMatchInlineSnapshot(`
 			[
@@ -258,7 +258,7 @@ describe("Wave 5 approvals and TUI", () => {
 			  "backend: justbash (available)",
 			  "file: read=enforced write=enforced",
 			  "network: deny allowlist=enforced",
-			  "unsupported controls: none",
+			  "omitted controls: none",
 			  "policy: desired1234567890 revision=7",
 			  "last block: network https://example.com/path network.mode=deny",
 			]

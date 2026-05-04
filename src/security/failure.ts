@@ -17,9 +17,9 @@ export const SandboxControlSchema = z.enum([
 
 export const SandboxBlockCodeSchema = z.enum([
 	"permission_denied",
-	"backend_unavailable",
+	"backend_missing",
 	"dependency_missing",
-	"capability_unsupported",
+	"capability_missing",
 	"backend_probe_failed",
 	"path_mapping_failed",
 	"policy_hash_mismatch",
@@ -68,16 +68,16 @@ const highRiskWriteClassSchema = z.enum(["dotenv", "ssh-key", "git-hook", "shell
 const approvalScopeSchema = z.enum(["once", "session", "project", "global"]);
 
 const permissionDeniedBlockSchema = BaseBlockSchema.extend({ code: z.literal("permission_denied") }).strict();
-const backendUnavailableBlockSchema = BaseBlockSchema.extend({
-	code: z.literal("backend_unavailable"),
+const backendMissingBlockSchema = BaseBlockSchema.extend({
+	code: z.literal("backend_missing"),
 	availabilityReason: z.string(),
 }).strict();
 const dependencyMissingBlockSchema = BaseBlockSchema.extend({
 	code: z.literal("dependency_missing"),
 	dependency: z.string(),
 }).strict();
-const capabilityUnsupportedBlockSchema = BaseBlockSchema.extend({
-	code: z.literal("capability_unsupported"),
+const capabilityMissingBlockSchema = BaseBlockSchema.extend({
+	code: z.literal("capability_missing"),
 	control: SandboxControlSchema,
 }).strict();
 const backendProbeFailedBlockSchema = BaseBlockSchema.extend({
@@ -118,9 +118,9 @@ const sandboxBackendErrorBlockSchema = BaseBlockSchema.extend({
 
 export const SandboxBlockV1Schema = z.discriminatedUnion("code", [
 	permissionDeniedBlockSchema,
-	backendUnavailableBlockSchema,
+	backendMissingBlockSchema,
 	dependencyMissingBlockSchema,
-	capabilityUnsupportedBlockSchema,
+	capabilityMissingBlockSchema,
 	backendProbeFailedBlockSchema,
 	pathMappingFailedBlockSchema,
 	policyHashMismatchBlockSchema,

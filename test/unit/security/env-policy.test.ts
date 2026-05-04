@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { EnvPolicy } from "../../../src/policy/desired.js";
-import { buildEnv, classifySecret } from "../../../src/security/env-policy.js";
+import { buildEnv, classifySecret, filterExplicitEnv } from "../../../src/security/env-policy.js";
 
 const basePolicy: EnvPolicy = {
 	clearenv: true,
@@ -24,6 +24,17 @@ describe("env-policy", () => {
 
 	it("#given proxy scrub enabled #when env is built #then proxy variables are removed", () => {
 		const env = buildEnv(basePolicy, { HTTP_PROXY: "http://proxy", PATH: "/bin" });
+		expect(env.has("HTTP_PROXY")).toBe(false);
+	});
+
+	it("#given explicit env contains denied secret #when env is filtered #then denied key is omitted", () => {
+		const env = filterExplicitEnv(basePolicy, new Map([["API_TOKEN", "secretsecret"]]), { PATH: "/bin" });
+		expect(env.has("API_TOKEN")).toBe(false);
+		expect(env.get("PATH")).toBe("/bin");
+	});
+
+	it("#given explicit env contains proxy #when env is filtered #then proxy key is omitted", () => {
+		const env = filterExplicitEnv(basePolicy, new Map([["HTTP_PROXY", "http://proxy"]]), { PATH: "/bin" });
 		expect(env.has("HTTP_PROXY")).toBe(false);
 	});
 

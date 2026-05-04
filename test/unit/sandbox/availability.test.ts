@@ -31,18 +31,18 @@ describe("BackendAvailability", () => {
 		expect(availability.status).toBe("available");
 	});
 
-	it("#given degraded backend #when constructed #then requires at least one unsupported control", () => {
+	it("#given degraded backend #when constructed #then requires at least one omitted control", () => {
 		// given
 		const availability = {
 			status: "degraded",
 			backend: "ssh",
 			capabilities,
-			unsupportedControls: ["denialAttribution"],
+			omittedControls: ["denialAttribution"],
 			reason: "Remote guard is not installed.",
 		} as const satisfies BackendAvailability;
 
 		// when / then
-		expect(availability.unsupportedControls[0]).toBe("denialAttribution");
+		expect(availability.omittedControls[0]).toBe("denialAttribution");
 	});
 
 	it("#given experimental backend #when constructed #then carries reason", () => {
@@ -58,10 +58,10 @@ describe("BackendAvailability", () => {
 		expect(availability.reason).toContain("experimental");
 	});
 
-	it("#given unavailable backend #when constructed #then carries failed probe results", () => {
+	it("#given missing backend #when constructed #then carries failed probe results", () => {
 		// given
 		const availability = {
-			status: "unavailable",
+			status: "missing",
 			backend: "qemu",
 			reason: "qemu-system-x86_64 missing",
 			probeResults: [

@@ -25,7 +25,7 @@ export const BackendAvailabilitySchema = z.discriminatedUnion("status", [
 			status: z.literal("degraded"),
 			backend: BackendKindSchema,
 			capabilities: BackendCapabilitySchema,
-			unsupportedControls: z.array(SandboxControlSchema).nonempty().readonly(),
+			omittedControls: z.array(SandboxControlSchema).nonempty().readonly(),
 			reason: z.string(),
 		})
 		.strict()
@@ -41,7 +41,7 @@ export const BackendAvailabilitySchema = z.discriminatedUnion("status", [
 		.readonly(),
 	z
 		.object({
-			status: z.literal("unavailable"),
+			status: z.literal("missing"),
 			backend: BackendKindSchema,
 			reason: z.string(),
 			probeResults: z.array(ProbeResultSchema).readonly(),
@@ -56,7 +56,7 @@ export type BackendAvailability =
 			readonly status: "degraded";
 			readonly backend: BackendKind;
 			readonly capabilities: BackendCapability;
-			readonly unsupportedControls: NonEmptyArray<SandboxControl>;
+			readonly omittedControls: NonEmptyArray<SandboxControl>;
 			readonly reason: string;
 	  }
 	| {
@@ -66,7 +66,7 @@ export type BackendAvailability =
 			readonly reason: string;
 	  }
 	| {
-			readonly status: "unavailable";
+			readonly status: "missing";
 			readonly backend: BackendKind;
 			readonly reason: string;
 			readonly probeResults: readonly ProbeResult[];

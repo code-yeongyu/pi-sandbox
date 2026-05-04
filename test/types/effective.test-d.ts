@@ -10,7 +10,7 @@ import type {
 } from "../../src/policy/effective.js";
 import type { SandboxControl } from "../../src/security/failure.js";
 
-expectTypeOf<ControlState>().toEqualTypeOf<"enforced" | "simulated" | "unverified" | "unsupported">();
+expectTypeOf<ControlState>().toEqualTypeOf<"enforced" | "simulated" | "unverified" | "omitted">();
 expectTypeOf<ControlEvidence["state"]>().toEqualTypeOf<ControlState>();
 expectTypeOf<ControlEvidence["reason"]>().toEqualTypeOf<string | undefined>();
 expectTypeOf<ControlEvidence["probeName"]>().toEqualTypeOf<string | undefined>();

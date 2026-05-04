@@ -45,6 +45,26 @@ export function buildEnv(policy: EnvPolicy, parentEnv: NodeJS.ProcessEnv): Reado
 	return Object.freeze(entries);
 }
 
+export function filterExplicitEnv(
+	policy: EnvPolicy,
+	explicitEnv: ReadonlyMap<string, string>,
+	defaultEnv: NodeJS.ProcessEnv = process.env,
+): ReadonlyMap<string, string> {
+	const entries = new Map<string, string>();
+	for (const [name, value] of explicitEnv) {
+		if (matchesAnyPolicyPattern(name, policy.denyPatterns)) continue;
+		if (policy.scrubProxyEnv && PROXY_KEYS.has(name)) continue;
+		entries.set(name, value);
+	}
+
+	entries.set("PATH", defaultEnv.PATH ?? sandboxPath());
+	entries.set("HOME", join(process.cwd(), ".pi", "sandbox-home"));
+	entries.set("TERM", defaultEnv.TERM ?? "dumb");
+	entries.set("LANG", defaultEnv.LANG ?? "C.UTF-8");
+
+	return Object.freeze(entries);
+}
+
 export function classifySecret(name: string, value: string): boolean {
 	return value.length > 0 && SECRET_NAME_PATTERN.test(name);
 }

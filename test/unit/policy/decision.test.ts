@@ -36,7 +36,7 @@ describe("decide", () => {
 		expect(decision).toEqual({ kind: "allow" });
 	});
 
-	it("#given restricted network without gateway #when decided #then capability unsupported denial is returned", () => {
+	it("#given restricted network without gateway #when decided #then capability missing denial is returned", () => {
 		const policy = makeEffectivePolicy({
 			network: {
 				mode: "restricted",
@@ -64,7 +64,7 @@ describe("decide", () => {
 		});
 		expect(decision.kind).toBe("deny");
 		if (decision.kind !== "deny") return;
-		expect(decision.block.code).toBe("capability_unsupported");
+		expect(decision.block.code).toBe("capability_missing");
 	});
 
 	it("#given approved high risk request id #when decided again #then prompt is bypassed", () => {

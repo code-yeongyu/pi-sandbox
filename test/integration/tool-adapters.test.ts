@@ -1,15 +1,17 @@
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { access, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { afterEach, describe, expect, it } from "vitest";
 
+import { createJustbashBackend } from "../../src/backends/justbash/adapter.js";
 import type { DesiredBackendConfig, FilePolicy } from "../../src/policy/desired.js";
-import type { SandboxBackend } from "../../src/sandbox/backend.js";
+import type { SandboxBackend, SandboxExecOptions } from "../../src/sandbox/backend.js";
 import { BackendRegistry } from "../../src/sandbox/backend-registry.js";
 import { SandboxManager } from "../../src/sandbox/manager.js";
 import type { PathMapper } from "../../src/sandbox/path-mapper.js";
 import type { Result, SandboxFailure } from "../../src/security/failure.js";
+import { toBashOperations } from "../../src/tools/bash-adapter.js";
 import { toEditOperations } from "../../src/tools/edit-adapter.js";
 import { toReadOperations } from "../../src/tools/read-adapter.js";
 import { toWriteOperations } from "../../src/tools/write-adapter.js";
@@ -94,6 +96,98 @@ describe("tool operation adapters", () => {
 		await expect(operations.writeFile(filePath, "blocked")).rejects.toThrow("[pi-sandbox blocked]");
 		await expect(operations.writeFile(filePath, "blocked")).rejects.toThrow("Rule: file.root.write=false");
 	});
+
+	it("#given real justbash file facets #when write then read tools run #then host workspace file is updated through backend", async () => {
+		const sessionRoot = await makeSessionRoot();
+		const filePath = path.join(sessionRoot, "real-justbash.txt");
+		const manager = await makeJustbashManager(
+			filePolicy({ root: sessionRoot, read: true, write: true, create: true }),
+			sessionRoot,
+		);
+		const writeOperations = toWriteOperations(manager);
+		const readOperations = toReadOperations(manager);
+
+		await writeOperations.writeFile(filePath, "backend-file-ok");
+		const buffer = await readOperations.readFile(filePath);
+
+		expect(buffer.toString("utf8")).toBe("backend-file-ok");
+		expect(await readFile(filePath, "utf8")).toBe("backend-file-ok");
+		await manager.dispose();
+	});
+
+	it("#given symlink inside sessionRoot pointing outside #when writeFile through justbash manager #then rejects and outside file absent", async () => {
+		const sessionRoot = await makeSessionRoot();
+		const outsideDir = await makeSessionRoot();
+		const symlinkPath = path.join(sessionRoot, "symlink");
+		await symlink(outsideDir, symlinkPath);
+		const manager = await makeJustbashManager(
+			filePolicy({ root: sessionRoot, read: true, write: true, create: true }),
+			sessionRoot,
+		);
+		const operations = toWriteOperations(manager);
+		const escapePath = path.join(symlinkPath, "escape.txt");
+
+		await expect(operations.writeFile(escapePath, "escaped")).rejects.toThrow("[pi-sandbox blocked]");
+		await expect(operations.writeFile(escapePath, "escaped")).rejects.toThrow("file.root.escape");
+
+		await expect(access(path.join(outsideDir, "escape.txt"))).rejects.toThrow();
+		await manager.dispose();
+	});
+
+	it("#given backend without read facet #when readFile is allowed by policy #then host filesystem fallback is rejected", async () => {
+		const sessionRoot = await makeSessionRoot();
+		const filePath = path.join(sessionRoot, "read-no-facet.txt");
+		await writeFile(filePath, "must-not-host-read", "utf8");
+		const manager = await makeManager(
+			filePolicy({ root: sessionRoot, read: true, write: false, create: false }),
+			false,
+		);
+		const operations = toReadOperations(manager);
+
+		await expect(operations.readFile(filePath)).rejects.toThrow("will not fall back to host filesystem reads");
+		await expect(operations.readFile(filePath)).rejects.toThrow("backend.read.facet-missing");
+	});
+
+	it("#given backend without write facet #when writeFile is allowed by policy #then host filesystem fallback is rejected", async () => {
+		const sessionRoot = await makeSessionRoot();
+		const filePath = path.join(sessionRoot, "write-no-facet.txt");
+		const manager = await makeManager(
+			filePolicy({ root: sessionRoot, read: true, write: true, create: true }),
+			false,
+		);
+		const operations = toWriteOperations(manager);
+
+		await expect(operations.writeFile(filePath, "must-not-host-write")).rejects.toThrow(
+			"will not fall back to host filesystem writes",
+		);
+		await expect(operations.writeFile(filePath, "must-not-host-write")).rejects.toThrow(
+			"backend.write.facet-missing",
+		);
+		await expect(readFile(filePath, "utf8")).rejects.toThrow();
+	});
+
+	it("#given explicit bash env contains denied secret #when bash adapter runs #then backend receives filtered env", async () => {
+		const sessionRoot = await makeSessionRoot();
+		let capturedEnvironment: ReadonlyMap<string, string> | undefined;
+		const manager = await makeManager(
+			filePolicy({ root: sessionRoot, read: true, write: true, create: true }),
+			true,
+			(options) => {
+				capturedEnvironment = options.env;
+			},
+		);
+		const operations = toBashOperations(manager);
+
+		await operations.exec("true", sessionRoot, {
+			env: { API_TOKEN: "secretsecret", SAFE: "1", HTTP_PROXY: "http://proxy" },
+			onData: () => undefined,
+		});
+
+		expect(capturedEnvironment?.has("API_TOKEN")).toBe(false);
+		expect(capturedEnvironment?.has("HTTP_PROXY")).toBe(false);
+		expect(capturedEnvironment?.get("SAFE")).toBe("1");
+		expect(capturedEnvironment?.has("PATH")).toBe(true);
+	});
 });
 
 async function makeSessionRoot(): Promise<string> {
@@ -102,8 +196,37 @@ async function makeSessionRoot(): Promise<string> {
 	return sessionRoot;
 }
 
-async function makeManager(file: FilePolicy): Promise<SandboxManager> {
-	const manager = new SandboxManager(registryWithBackend(fakeBackend()), makeEffectivePolicy({ file }));
+async function makeManager(
+	file: FilePolicy,
+	includeFileFacets = true,
+	onExec?: (options: SandboxExecOptions) => void,
+): Promise<SandboxManager> {
+	const manager = new SandboxManager(
+		registryWithBackend(fakeBackend(includeFileFacets, onExec)),
+		makeEffectivePolicy({ file }),
+	);
+	const initialized = await manager.init();
+	if (!initialized.ok) throw new Error(initialized.error.remediation);
+	return manager;
+}
+
+async function makeJustbashManager(file: FilePolicy, sessionRoot: string): Promise<SandboxManager> {
+	const backendConfig: DesiredBackendConfig = {
+		kind: "justbash",
+		fs: "read-write-root-locked",
+		allowedBinaries: [],
+		executionLimits: { maxOutputBytes: 1024 * 1024, maxRuntimeMs: 30_000 },
+	};
+	const registry = new BackendRegistry();
+	registry.register("justbash", async () =>
+		createJustbashBackend(backendConfig, sessionRoot, {
+			clearenv: true,
+			allowlist: ["PATH", "HOME", "TERM", "LANG"],
+			denyPatterns: ["*_TOKEN"],
+			scrubProxyEnv: true,
+		}),
+	);
+	const manager = new SandboxManager(registry, makeEffectivePolicy({ file }), { backendConfig });
 	const initialized = await manager.init();
 	if (!initialized.ok) throw new Error(initialized.error.remediation);
 	return manager;
@@ -115,7 +238,7 @@ function registryWithBackend(backend: SandboxBackend): BackendRegistry {
 	return registry;
 }
 
-function fakeBackend(): SandboxBackend {
+function fakeBackend(includeFileFacets = true, onExec?: (options: SandboxExecOptions) => void): SandboxBackend {
 	return {
 		kind: "justbash",
 		capabilities: fullCapability,
@@ -126,7 +249,33 @@ function fakeBackend(): SandboxBackend {
 			health: async () => ({ healthy: true, backend: "justbash", latencyMs: 1 }),
 			probe: async () => [],
 		},
-		bash: { exec: async () => ok({ exitCode: 0 }) },
+		bash: {
+			exec: async (_command: string, options: SandboxExecOptions) => {
+				onExec?.(options);
+				return ok({ exitCode: 0 });
+			},
+		},
+		...(includeFileFacets
+			? {
+					read: {
+						readFile: async (absolutePath: string) => ok(await readFile(absolutePath)),
+						access: async (absolutePath: string) => {
+							await access(absolutePath);
+							return ok(undefined);
+						},
+					},
+					write: {
+						writeFile: async (absolutePath: string, content: string | Buffer) => {
+							await writeFile(absolutePath, content);
+							return ok(undefined);
+						},
+						mkdir: async (absolutePath: string) => {
+							await mkdir(absolutePath, { recursive: true });
+							return ok(undefined);
+						},
+					},
+				}
+			: {}),
 	};
 }
 

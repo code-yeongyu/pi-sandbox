@@ -15,7 +15,7 @@ import {
 	ProcessPolicySchema,
 } from "./desired.js";
 
-export const ControlStateSchema = z.enum(["enforced", "simulated", "unverified", "unsupported"]);
+export const ControlStateSchema = z.enum(["enforced", "simulated", "unverified", "omitted"]);
 
 export const ControlEvidenceSchema = z
 	.object({
@@ -71,10 +71,10 @@ export const ProbeResultSchema = z.discriminatedUnion("kind", [
 export const EffectiveBackendStateSchema = z
 	.object({
 		kind: BackendKindSchema,
-		status: z.enum(["available", "degraded", "experimental", "unavailable"]),
+		status: z.enum(["available", "degraded", "experimental", "missing"]),
 		capabilities: BackendCapabilitySchema,
 		effectiveControls: EffectiveControlsSchema,
-		unsupportedControls: z.array(SandboxControlSchema).readonly(),
+		omittedControls: z.array(SandboxControlSchema).readonly(),
 		probeResults: z.array(ProbeResultSchema).readonly(),
 		diagnostics: z.array(z.string()).readonly(),
 	})
@@ -112,10 +112,10 @@ export type EffectiveControls = Readonly<Record<SandboxControl, ControlEvidence>
 export type ProbeResult = z.infer<typeof ProbeResultSchema>;
 export type EffectiveBackendState = {
 	readonly kind: BackendKind;
-	readonly status: "available" | "degraded" | "experimental" | "unavailable";
+	readonly status: "available" | "degraded" | "experimental" | "missing";
 	readonly capabilities: BackendCapability;
 	readonly effectiveControls: EffectiveControls;
-	readonly unsupportedControls: readonly SandboxControl[];
+	readonly omittedControls: readonly SandboxControl[];
 	readonly probeResults: readonly ProbeResult[];
 	readonly diagnostics: readonly string[];
 };

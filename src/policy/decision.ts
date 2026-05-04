@@ -419,7 +419,7 @@ function denyCapability(
 		kind: "deny",
 		block: createBlock({
 			version: 1,
-			code: "capability_unsupported",
+			code: "capability_missing",
 			policyArea: "network",
 			operation,
 			sanitizedTarget,

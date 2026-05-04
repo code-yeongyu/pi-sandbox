@@ -58,6 +58,98 @@ describe("SandboxManager", () => {
 		expect(events).toContain("init");
 	});
 
+	it("#given explicit backend config #when manager initializes #then registry receives exact config", async () => {
+		const backendConfig: DesiredBackendConfig = {
+			kind: "docker",
+			image: "custom:latest",
+			networkMode: "bridge",
+			readonlyRootfs: false,
+			mounts: [{ hostPath: process.cwd(), sandboxPath: "/workspace", mode: "readwrite", persist: "host" }],
+			pullPolicy: "never",
+			memoryMb: 1024,
+			cpuQuota: 50_000,
+			capDrop: ["NET_RAW"],
+			securityOpt: ["no-new-privileges"],
+			tmpfs: ["/tmp:size=64m"],
+		};
+		let resolvedConfig: DesiredBackendConfig | null = null;
+		const registry = new BackendRegistry();
+		registry.register("docker", async (config) => {
+			resolvedConfig = config;
+			return ok(fakeBackend());
+		});
+		const manager = new SandboxManager(
+			registry,
+			makeEffectivePolicy({ backend: { ...makeEffectivePolicy().backend, kind: "docker" } }),
+			{ backendConfig },
+		);
+
+		const result = await manager.init();
+
+		expect(result.ok).toBe(true);
+		expect(manager.getDesiredBackendConfig()).toBe(backendConfig);
+		expect(resolvedConfig).toBe(backendConfig);
+	});
+
+	it("#given docker policy without matching backend config #when manager initializes #then it fails instead of resolving justbash", async () => {
+		let called = false;
+		const registry = new BackendRegistry();
+		registry.register("justbash", async () => {
+			called = true;
+			return ok(fakeBackend());
+		});
+		const manager = new SandboxManager(
+			registry,
+			makeEffectivePolicy({ backend: { ...makeEffectivePolicy().backend, kind: "docker" } }),
+		);
+
+		const result = await manager.init();
+
+		expect(result.ok).toBe(false);
+		expect(called).toBe(false);
+		if (result.ok) return;
+		expect(result.error.code).toBe("backend_missing");
+		if (result.error.code !== "backend_missing") return;
+		expect(result.error.availabilityReason).toBe("backend-config-policy-kind-mismatch");
+	});
+
+	it("#given restricted network without gateway #when manager initializes #then capability failure is returned", async () => {
+		let called = false;
+		const registry = new BackendRegistry();
+		registry.register("justbash", async () => {
+			called = true;
+			return ok(fakeBackend());
+		});
+		const policy = makeEffectivePolicy({
+			network: {
+				mode: "restricted",
+				default: "deny",
+				allowDomains: [],
+				denyDomains: [],
+				allowUrlPrefixes: ["https://example.com/api/"],
+				allowPorts: [],
+				allowCidrs: [],
+				denyPrivateNetworks: true,
+				denyMetadata: true,
+				allowUnixSockets: false,
+				scrubProxyEnv: true,
+				dns: "deny",
+			},
+			backend: {
+				...makeEffectivePolicy().backend,
+				capabilities: { ...fullCapability, networkAllowlist: false, networkGateway: false },
+			},
+		});
+		const manager = new SandboxManager(registry, policy);
+
+		const result = await manager.init();
+
+		expect(result.ok).toBe(false);
+		expect(called).toBe(false);
+		if (result.ok) return;
+		expect(result.error.code).toBe("capability_missing");
+	});
+
 	it("#given initialized manager #when disposed #then backend dispose is called", async () => {
 		const events: string[] = [];
 		const manager = new SandboxManager(registryWithBackend(fakeBackend(events)), makeEffectivePolicy());
@@ -119,12 +211,11 @@ describe("SandboxManager", () => {
 		expect(allowed).toEqual({ ok: true, value: "ran" });
 	});
 
-	it("#given missing backend factory #when registry resolves #then backend unavailable is returned", async () => {
+	it("#given missing backend factory #when registry resolves #then backend missing is returned", async () => {
 		const result = await new BackendRegistry().resolve({
 			kind: "justbash",
 			fs: "memory",
 			allowedBinaries: [],
-			allowedLibraries: [],
 			executionLimits: { maxOutputBytes: 1, maxRuntimeMs: 1 },
 		});
 		expect(result.ok).toBe(false);
@@ -134,7 +225,7 @@ describe("SandboxManager", () => {
 		const result = await new BackendRegistry().resolve({ kind: "auto" });
 		expect(result.ok).toBe(false);
 		if (result.ok) return;
-		expect(result.error.code).toBe("backend_unavailable");
+		expect(result.error.code).toBe("backend_missing");
 	});
 
 	it("#given executor backend failure #when run #then failure is preserved", async () => {

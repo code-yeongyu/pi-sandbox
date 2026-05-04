@@ -24,8 +24,8 @@ function visibleStatus(mode: SandboxMode): string {
 			return `enforcing:${mode.backend}`;
 		case "disabled-by-user":
 			return `disabled:${mode.scope}`;
-		case "unavailable":
-			return `unavailable:${mode.reason}`;
+		case "missing":
+			return `missing:${mode.reason}`;
 	}
 }
 
@@ -51,15 +51,15 @@ describe("SandboxMode", () => {
 		expect(visibleStatus(mode)).toBe("disabled:session");
 	});
 
-	it("#given unavailable mode #when constructed #then exhaustive match handles it", () => {
+	it("#given missing mode #when constructed #then exhaustive match handles it", () => {
 		// given
 		const mode = {
-			kind: "unavailable",
+			kind: "missing",
 			backend: "native",
 			reason: "sandbox-exec missing",
 		} as const satisfies SandboxMode;
 
 		// when / then
-		expect(visibleStatus(mode)).toBe("unavailable:sandbox-exec missing");
+		expect(visibleStatus(mode)).toBe("missing:sandbox-exec missing");
 	});
 });

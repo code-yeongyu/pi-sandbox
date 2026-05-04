@@ -10,14 +10,10 @@ export type EnvInput = {
 
 export function toTuiFooter(effectivePolicy: EffectivePolicy, mode: SandboxMode): string {
 	const backend =
-		mode.kind === "enforcing"
-			? mode.backend
-			: mode.kind === "unavailable"
-				? (mode.backend ?? "unavailable")
-				: "disabled";
-	const unsupported = effectivePolicy.backend.unsupportedControls.length;
+		mode.kind === "enforcing" ? mode.backend : mode.kind === "missing" ? (mode.backend ?? "missing") : "disabled";
+	const omitted = effectivePolicy.backend.omittedControls.length;
 	const shortRevision = `${effectivePolicy.policyRevision}:${effectivePolicy.desiredPolicyHash.slice(0, 8)}`;
-	return `sandbox ${mode.kind} ${backend} fs=${effectivePolicy.backend.capabilities.fsPathResolution} net=${networkLabel(effectivePolicy)} unsupported=${unsupported} grants=${effectivePolicy.grantHash.slice(0, 8)} rev=${shortRevision}`;
+	return `sandbox ${mode.kind} ${backend} fs=${effectivePolicy.backend.capabilities.fsPathResolution} net=${networkLabel(effectivePolicy)} omitted=${omitted} grants=${effectivePolicy.grantHash.slice(0, 8)} rev=${shortRevision}`;
 }
 
 export function toTuiWidget(
@@ -30,7 +26,7 @@ export function toTuiWidget(
 		`backend: ${effectivePolicy.backend.kind} (${effectivePolicy.backend.status})`,
 		`file: read=${stateFor(effectivePolicy, "fileRead")} write=${stateFor(effectivePolicy, "fileWrite")}`,
 		`network: ${networkLabel(effectivePolicy)} allowlist=${stateFor(effectivePolicy, "networkAllowlist")}`,
-		`unsupported controls: ${effectivePolicy.backend.unsupportedControls.join(",") || "none"}`,
+		`omitted controls: ${effectivePolicy.backend.omittedControls.join(",") || "none"}`,
 		`policy: ${effectivePolicy.desiredPolicyHash} revision=${effectivePolicy.policyRevision}`,
 	];
 	if (lastBlock !== undefined)
@@ -60,7 +56,7 @@ export function toSandboxStatus(
 		`policyHash: ${effectivePolicy.desiredPolicyHash}`,
 		`grantHash: ${effectivePolicy.grantHash}`,
 		`effectiveCapabilityHash: ${effectivePolicy.effectiveCapabilityHash}`,
-		`unsupportedControls: ${effectivePolicy.backend.unsupportedControls.join(",") || "none"}`,
+		`omittedControls: ${effectivePolicy.backend.omittedControls.join(",") || "none"}`,
 		"probes:",
 		...(probeLines.length === 0 ? ["probe none: not-run"] : probeLines),
 		"env:",

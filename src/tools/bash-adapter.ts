@@ -4,6 +4,7 @@ import { toBashBlockedOutput } from "../explain/render-bash-output.js";
 import type { BashOperations } from "../pi/index.js";
 import type { SandboxOperation } from "../policy/decision.js";
 import type { SandboxManager } from "../sandbox/manager.js";
+import { filterExplicitEnv } from "../security/env-policy.js";
 import { createBlock } from "../security/failure.js";
 import { wrapWithRedactor } from "../security/redactor.js";
 
@@ -18,7 +19,7 @@ export function toBashOperations(manager: SandboxManager): BashOperations {
 						ok: false,
 						error: createBlock({
 							version: 1,
-							code: "capability_unsupported",
+							code: "capability_missing",
 							policyArea: "process",
 							operation: "bash.exec",
 							sanitizedTarget: "bash",
@@ -26,12 +27,12 @@ export function toBashOperations(manager: SandboxManager): BashOperations {
 							backend: manager.getEffectivePolicy().backend.kind,
 							policyHash: manager.getEffectivePolicy().desiredPolicyHash,
 							policyRevision: manager.getEffectivePolicy().policyRevision,
-							remediation: "Switch to a backend that supports bash execution.",
+							remediation: "Switch to a backend that provides bash execution.",
 							control: "processIsolation",
 						}),
 					};
 				}
-				const environment = envMap(options.env);
+				const environment = envMap(options.env, manager.getEffectivePolicy().env);
 				const execOptions = {
 					cwd,
 					...(options.signal === undefined ? {} : { signal: options.signal }),
@@ -49,11 +50,14 @@ export function toBashOperations(manager: SandboxManager): BashOperations {
 	};
 }
 
-function envMap(env: NodeJS.ProcessEnv | undefined): ReadonlyMap<string, string> | undefined {
+function envMap(
+	env: NodeJS.ProcessEnv | undefined,
+	policy: ReturnType<SandboxManager["getEffectivePolicy"]>["env"],
+): ReadonlyMap<string, string> | undefined {
 	if (env === undefined) return undefined;
 	const entries = new Map<string, string>();
 	for (const [key, value] of Object.entries(env)) {
 		if (value !== undefined) entries.set(key, value);
 	}
-	return entries;
+	return filterExplicitEnv(policy, entries);
 }

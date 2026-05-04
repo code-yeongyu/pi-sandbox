@@ -27,11 +27,11 @@ function payloadFor(code: SandboxBlockCode): Record<string, unknown> {
 	switch (code) {
 		case "permission_denied":
 			return {};
-		case "backend_unavailable":
+		case "backend_missing":
 			return { availabilityReason: "Docker daemon is stopped" };
 		case "dependency_missing":
 			return { dependency: "docker" };
-		case "capability_unsupported":
+		case "capability_missing":
 			return { control: "networkAllowlist" };
 		case "backend_probe_failed":
 			return { probeName: "docker-network-deny", probeOutput: "egress succeeded" };
@@ -126,9 +126,9 @@ describe("createBlock", () => {
 		expect(result.success).toBe(false);
 	});
 
-	it("#given capability unsupported block without control #when parsing #then rejects the payload", () => {
+	it("#given capability missing block without control #when parsing #then rejects the payload", () => {
 		// given
-		const input = { ...baseBlock, code: "capability_unsupported" };
+		const input = { ...baseBlock, code: "capability_missing" };
 
 		// when
 		const result = SandboxBlockV1Schema.safeParse(input);
