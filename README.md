@@ -4,7 +4,7 @@
 [![npm version](https://img.shields.io/npm/v/pi-sandbox.svg)](https://www.npmjs.com/package/pi-sandbox)
 [![license](https://img.shields.io/npm/l/pi-sandbox.svg)](https://github.com/code-yeongyu/pi-sandbox/blob/main/LICENSE)
 
-Policy-aware sandboxing extension for [pi-mono](https://github.com/mariozechner/pi-mono) that intercepts `bash`, `read`, `write`, and `edit` tool operations and enforces per-project sandbox policy across five isolation backends.
+Policy-aware sandboxing extension for [pi-mono](https://github.com/mariozechner/pi-mono) that intercepts `bash`, `read`, `write`, and `edit` tool operations and enforces per-project sandbox policy across native, Docker, justbash, and QEMU sandbox backends. SSH is a remote transport profile with file facets and env scrub semantics.
 
 ## Quick start
 
@@ -31,21 +31,21 @@ pi -e ./node_modules/pi-sandbox/src/index.ts
 
 ## Feature matrix
 
-| Control | justbash | docker | native (darwin) | native (linux) | qemu | ssh |
-|---------|:--------:|:------:|:---------------:|:--------------:|:----:|:---:|
-| fileRead | yes | no | yes | yes | yes | no |
-| fileWrite | yes | no | yes | yes | rw only | no |
-| fsPathResolution | mount-boundary | mount-boundary | realpath+toctou | mount-boundary | mount-boundary | unsupported |
-| networkDeny | yes | yes | yes | yes | yes | no |
-| networkAllowlist | yes | no | no | no | no | no |
-| processIsolation | yes | yes | simulated | yes | yes | no |
-| envScrub | yes | yes | yes | yes | yes | yes |
+| Control | justbash | docker | native (darwin) | native (linux) | qemu | ssh transport |
+|---------|:--------:|:------:|:---------------:|:--------------:|:----:|:-------------:|
+| fileRead | host-root | bind mount | host-root | host-root | shared root | remoteRoot |
+| fileWrite | host-root | bind mount | host-root | host-root | share mode | remoteRoot |
+| fsPathResolution | mount-boundary | mount-boundary | realpath+toctou | mount-boundary | mount-boundary | mount-boundary |
+| networkDeny | virtual shell | network none | sandbox-exec | bwrap | network none | transport only |
+| restricted network | config error | config error | config error | config error | config error | config error |
+| processIsolation | virtual shell | container | seatbelt policy | bwrap | VM | transport only |
+| envScrub | local | container | local | local | guest | remote |
 | stdoutCapture | streaming | streaming | streaming | streaming | streaming | streaming |
-| pathMapping | yes | yes | no | no | yes | yes |
-| persistence | no | no | yes | yes | no | yes |
-| denialAttribution | yes | yes | yes | yes | yes | no |
+| pathMapping | host-root | bind mount | identity | identity | shared root | remoteRoot |
+| persistence | ephemeral | ephemeral | yes | yes | ephemeral | remoteRoot lifecycle |
+| denialAttribution | structured | structured | structured | structured | structured | generic |
 
-See [docs/BACKENDS.md](docs/BACKENDS.md) for per-backend capability tables, probe semantics, and honest "unsupported" listings.
+See [docs/BACKENDS.md](docs/BACKENDS.md) for per-backend capability tables, probe semantics, and operational limits.
 
 ## Configuration
 
@@ -57,6 +57,8 @@ Policy lives in JSONC files:
 - `~/.pi/sandbox.grants.jsonc` — global approval grants
 
 See [docs/CONFIG.md](docs/CONFIG.md) for the full schema, merge semantics, hash bindings, and annotated examples.
+
+CI release gates can require one backend smoke with `npm run test:live-required`; it sets `PI_SANDBOX_REQUIRE_LIVE=1` and fails if the live smoke cannot execute.
 
 ## TUI and slash commands
 

@@ -2,16 +2,27 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.0.0] - 2026-05-04
+
+### Changed
+
+- Prepared the 1.0 release surface: native schema now exposes only darwin `sandbox-exec` and linux `bwrap`.
+- Restricted network policies now fail fast on backends without a gateway instead of being rewritten to `deny`.
+- Marked justbash restricted network capability honestly while retaining its backend-local URL-prefix adapter for internal use.
+- Generated a meaningful JSON Schema and added test coverage for backend, network, and file shapes.
+- Added `npm run test:live-required` for CI-facing live backend smoke enforcement.
+- Reframed SSH docs as a remote transport profile rather than a full sandbox backend.
+
 ## [0.0.1] - 2026-05-01
 
 ### Added
 
-- Five sandbox backends: `justbash` (virtual shell), `docker` (container per command), `native` (darwin `sandbox-exec` and linux `bwrap`), `qemu` (full VM), `ssh` (remote execution)
+- Sandbox backends: `justbash` (virtual shell), `docker` (container per command), `native` (darwin `sandbox-exec` and linux `bwrap`), `qemu` (full VM), plus `ssh` remote transport facets
 - Backend registry with availability probing and fallback chain resolution
 - `SandboxManager` orchestrating policy decisions, backend lifecycle, and operation execution
 - Policy decision engine with support for file, network, process, and bash operations
 - 12 stable `SandboxBlockV1` error codes with typed Zod schemas
-- Effective policy normalization with capability hash binding and control state taxonomy (`enforced`, `simulated`, `unverified`, `unsupported`)
+- Effective policy normalization with capability hash binding and control state taxonomy
 - JSONC config loader with project/global merge semantics and grant file support
 - TUI footer and widget showing backend status, control states, and recent blocks
 - Five slash commands: `/sandbox`, `/sandbox-status`, `/sandbox-switch`, `/sandbox-allow`, `/sandbox-deny`

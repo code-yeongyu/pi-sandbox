@@ -1,7 +1,7 @@
 {
 	"name": "pi-sandbox",
-	"version": "0.0.0",
-	"description": "Sandbox policy extension for pi-mono with native, Docker, justbash, QEMU, and SSH backends.",
+	"version": "1.0.0",
+	"description": "Sandbox policy extension for pi-mono with native, Docker, justbash, and QEMU sandbox backends plus SSH transport facets.",
 	"type": "module",
 	"license": "MIT",
 	"homepage": "https://github.com/code-yeongyu/pi-sandbox",
@@ -40,6 +40,7 @@
 		"test": "vitest run",
 		"test:watch": "vitest",
 		"test:integration": "vitest run test/integration --passWithNoTests",
+		"test:live-required": "PI_SANDBOX_REQUIRE_LIVE=1 vitest run test/integration/live-required.test.ts",
 		"typecheck": "tsgo --noEmit",
 		"lint": "biome check .",
 		"lint:fix": "biome check --write .",

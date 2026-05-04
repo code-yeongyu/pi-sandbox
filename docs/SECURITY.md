@@ -25,9 +25,9 @@ pi-sandbox uses 12 stable block codes defined in [src/security/failure.ts](../sr
 | Code | Policy area | Meaning | When it fires | User action |
 |------|-------------|---------|---------------|-------------|
 | `permission_denied` | file.read, file.write, network, process | Operation violates policy | File outside roots, network URL denied, binary not allowed | Adjust policy or request a grant |
-| `backend_unavailable` | backend | Backend cannot start | Missing binary, wrong platform, daemon down | Install dependency or switch backend |
+| `backend_missing` | backend | Backend cannot start | Missing binary, wrong platform, daemon down | Install dependency or switch backend |
 | `dependency_missing` | backend | Required host binary missing | `bwrap`, `sandbox-exec`, `qemu-system-x86_64` not found | Install the missing dependency |
-| `capability_unsupported` | backend | Backend lacks capability for requested control | Restricted network on backend without `networkGateway` | Switch backend or simplify policy |
+| `capability_missing` | backend | Backend lacks capability for requested control | Restricted network on backend without `networkGateway` | Switch backend or simplify policy |
 | `backend_probe_failed` | backend | Runtime probe did not pass | Docker container lacks `capsh`, bwrap namespace not working | Inspect probe output and fix host setup |
 | `path_mapping_failed` | backend | Path cannot be mapped into sandbox | Path outside project root on mapped backend | Run from inside the project root |
 | `policy_hash_mismatch` | backend | Effective policy hash does not match expected | Config reloaded but operation cached old hash | Retry the operation |
@@ -46,9 +46,9 @@ Each control in `EffectivePolicy.backend.effectiveControls` has a `state` field:
 | `enforced` | Active runtime enforcement | docker `networkDeny` with `networkMode: "none"` |
 | `simulated` | Policy checks exist but no hard kernel/container boundary | darwin `processIsolation` (seatbelt is not a PID namespace) |
 | `unverified` | Capability claims true but no probe has run yet | ssh `envScrub` before first probe |
-| `unsupported` | Backend cannot implement this control | docker `networkAllowlist` |
+| `omitted` | API state for controls not provided by the backend | docker `networkAllowlist` |
 
-Controls listed in `EffectivePolicy.backend.unsupportedControls` are permanently unsupported for the current backend and policy combination. The `normalizeConfig` function may downgrade `restricted` network to `deny` and add `networkAllowlist` to `unsupportedControls` when the backend lacks `networkGateway`.
+Controls listed in `EffectivePolicy.backend.omittedControls` are omitted by the current backend and policy combination. `normalizeConfig` preserves `restricted` network intent; manager initialization returns `capability_missing` when the selected backend does not provide `networkGateway` and `networkAllowlist`.
 
 ## Path canonicalization
 
@@ -79,7 +79,8 @@ The `buildEnv` function constructs a sandbox environment:
 - **Agent forwarding**: Off by default. The remote command is prefixed with `env -i` and only non-secret env assignments are forwarded.
 - **Strict host key verification**: Enabled by default. The `hostVerification.strict` option controls this. A probe verifies that mismatched fingerprints are rejected.
 - **Env scrub on remote**: The SSH backend runs `scrubbedCommand` which wraps the remote command in `env -i` with a filtered env. The `probeEnvScrub` probe checks that `SSH_AUTH_SOCK` and secret keys are not present in remote `printenv` output.
-- **SSHv1 unsupported**: The schema includes `auth.kind: "v1"` for completeness but SSHv1 is not recommended and may not work with modern servers.
+- **No persistence guarantee**: SSH file facets target representable paths under `remoteRoot`, but pi-sandbox does not sync local project files to or from the remote host.
+- **SSHv1**: The schema includes `auth.kind: "v1"` for completeness, but SSHv1 is not recommended and may not work with modern servers.
 - **Proxy jump**: Supported via `proxyJump` array. Each hop is an `SshBackendConfig` connected in sequence.
 
 ## Approval flow

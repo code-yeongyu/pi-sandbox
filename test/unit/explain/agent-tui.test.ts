@@ -36,8 +36,8 @@ describe("agent and tui renderers", () => {
 		expect(footer).toContain("disabled-by-user");
 	});
 
-	it("#given widget without block #when rendered #then unsupported controls line is present", () => {
-		expect(toTuiWidget(makeEffectivePolicy(), mode).join("\n")).toContain("unsupported controls: none");
+	it("#given widget without block #when rendered #then omitted controls line is present", () => {
+		expect(toTuiWidget(makeEffectivePolicy(), mode).join("\n")).toContain("omitted controls: none");
 	});
 
 	it("#given widget with block #when rendered #then last block is included", () => {
