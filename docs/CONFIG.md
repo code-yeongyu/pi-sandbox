@@ -21,7 +21,7 @@ The config object supports these top-level keys (defined in [src/config/schema.t
 |-----|------|---------|
 | `backend` | BackendConfig | `{ kind: "auto" }` |
 | `fallbackBackends` | BackendKind[] | `[]` |
-| `backendUnavailable` | `"fail" \| "prompt" \| "disabled-by-user"` | `"prompt"` |
+| `backendMissing` | `"fail" \| "prompt" \| "disabled-by-user"` | `"prompt"` |
 | `network` | NetworkPolicy | `{ mode: "deny" }` |
 | `file` | FilePolicy | see below |
 | `process` | ProcessPolicy | `{ isolation: true, gitHooks: "prompt", capDrop: [] }` |
@@ -30,6 +30,8 @@ The config object supports these top-level keys (defined in [src/config/schema.t
 | `tui` | TuiConfig | `{ statusLine: true, detailsWidget: "on-block", promptStyle: "compact" }` |
 | `agentAwareness` | AgentAwarenessConfig | see below |
 | `audit` | AuditConfig | `{ enabled: true, path: ".pi/sandbox-audit.jsonl", includeToolArgs: "redacted" }` |
+
+`backend.kind: "auto"` resolves to `justbash` with `fs: "read-write-root-locked"` for normal session startup. That default keeps file tools working against the project root while still routing operations through the sandbox policy gates.
 
 ## Complete annotated example
 
@@ -50,7 +52,7 @@ The config object supports these top-level keys (defined in [src/config/schema.t
 		"tmpfs": []
 	},
 	"fallbackBackends": ["justbash", "native"],
-	"backendUnavailable": "prompt",
+	"backendMissing": "prompt",
 
 	// Network policy
 	"network": {

@@ -140,7 +140,7 @@ function compact(config: SandboxRawConfig): SandboxRawConfig {
 	if (config.backend !== undefined) result.backend = config.backend;
 	if (config.fallbackBackends !== undefined && config.fallbackBackends.length > 0)
 		result.fallbackBackends = config.fallbackBackends;
-	if (config.backendUnavailable !== undefined) result.backendUnavailable = config.backendUnavailable;
+	if (config.backendMissing !== undefined) result.backendMissing = config.backendMissing;
 	if (config.network !== undefined) result.network = config.network;
 	if (config.file !== undefined) result.file = config.file;
 	if (config.process !== undefined) result.process = config.process;
@@ -165,7 +165,7 @@ export function mergeConfigs(layers: ReadonlyArray<ConfigLayer>): SandboxRawConf
 			...merged,
 			backend: mergeBackend(merged.backend, next.backend),
 			fallbackBackends,
-			backendUnavailable: next.backendUnavailable ?? merged.backendUnavailable,
+			backendMissing: next.backendMissing ?? merged.backendMissing,
 			network: mergeNetwork(merged.network, next.network),
 			file: mergeFile(merged.file, next.file),
 			process: next.process ?? merged.process,

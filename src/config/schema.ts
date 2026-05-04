@@ -27,7 +27,7 @@ export const SandboxConfigTopLevelKeys = new Set([
 	"audit",
 	"backend",
 	"fallbackBackends",
-	"backendUnavailable",
+	"backendMissing",
 ]);
 
 const backendKinds = ["native", "docker", "justbash", "qemu", "ssh"] as const;
@@ -179,7 +179,6 @@ const JustbashBackendConfigSchema = z
 		kind: z.literal("justbash"),
 		fs: z.enum(["memory", "overlay", "read-write-root-locked"]).default("memory"),
 		allowedBinaries: z.array(z.string()).readonly().default([]),
-		allowedLibraries: z.array(z.string()).readonly().default([]),
 		network: NetworkPolicySchema.optional(),
 		customCommands: z
 			.record(
@@ -211,14 +210,7 @@ const NativeBackendConfigSchema = z.discriminatedUnion("platform", [
 		.object({
 			kind: z.literal("native"),
 			platform: z.literal("linux"),
-			mechanism: z.enum(["bwrap", "landlock-experimental"]),
-		})
-		.strict(),
-	z
-		.object({
-			kind: z.literal("native"),
-			platform: z.literal("win32"),
-			mechanism: z.enum(["appcontainer", "wsl2-bwrap"]),
+			mechanism: z.literal("bwrap"),
 		})
 		.strict(),
 ]);
@@ -234,7 +226,6 @@ const QemuBackendConfigSchema = z
 						kind: z.literal("user"),
 						kernelPath: z.string(),
 						initrdPath: z.string(),
-						rootImagePath: z.string().optional(),
 					})
 					.strict(),
 			])
@@ -280,7 +271,6 @@ const SshBackendConfigSchema: z.ZodType<SshBackendConfig> = z.lazy(() =>
 			auth: SshAuthConfigSchema,
 			hostVerification: SshHostVerificationConfigSchema,
 			remoteRoot: z.string(),
-			sync: z.enum(["rsync", "sftp"]).default("rsync"),
 			proxyJump: z.array(SshBackendConfigSchema).readonly().default([]),
 		})
 		.strict(),
@@ -309,7 +299,7 @@ export const SandboxConfigSchema = z
 	.object({
 		backend: BackendConfigSchema.default({ kind: "auto" }),
 		fallbackBackends: z.array(z.enum(backendKinds)).readonly().default([]),
-		backendUnavailable: z.enum(["fail", "prompt", "disabled-by-user"]).default("prompt"),
+		backendMissing: z.enum(["fail", "prompt", "disabled-by-user"]).default("prompt"),
 		network: NetworkPolicySchema.default({ mode: "deny" }),
 		file: FilePolicySchema.default({
 			defaultRead: "deny",
@@ -350,7 +340,7 @@ export const SandboxConfigSchema = z
 export const SandboxRawConfigSchema = SandboxConfigSchema.partial().strict();
 
 export type ApprovalDecision = z.infer<typeof ApprovalDecisionSchema>;
-export type SandboxConfig = DesiredPolicy;
+export type SandboxConfig = z.infer<typeof SandboxConfigSchema>;
 export type SandboxRawConfig = {
 	readonly [TKey in keyof DesiredPolicy]?: Partial<DesiredPolicy[TKey]> | DesiredPolicy[TKey] | undefined;
 };

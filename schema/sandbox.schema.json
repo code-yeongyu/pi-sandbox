@@ -1,7 +1,741 @@
 {
-	"$ref": "#/definitions/SandboxConfig",
-	"definitions": {
-		"SandboxConfig": {}
-	},
-	"$schema": "http://json-schema.org/draft-07/schema#"
+	"$schema": "http://json-schema.org/draft-07/schema#",
+	"$id": "https://github.com/code-yeongyu/pi-sandbox/schema/sandbox.schema.json",
+	"title": "pi-sandbox configuration",
+	"type": "object",
+	"additionalProperties": false,
+	"properties": {
+		"backend": {
+			"oneOf": [
+				{
+					"type": "object",
+					"required": [
+						"kind"
+					],
+					"additionalProperties": false,
+					"properties": {
+						"kind": {
+							"const": "auto"
+						}
+					}
+				},
+				{
+					"type": "object",
+					"required": [
+						"kind",
+						"platform",
+						"mechanism"
+					],
+					"additionalProperties": false,
+					"properties": {
+						"kind": {
+							"const": "native"
+						},
+						"platform": {
+							"const": "darwin"
+						},
+						"mechanism": {
+							"const": "sandbox-exec"
+						}
+					}
+				},
+				{
+					"type": "object",
+					"required": [
+						"kind",
+						"platform",
+						"mechanism"
+					],
+					"additionalProperties": false,
+					"properties": {
+						"kind": {
+							"const": "native"
+						},
+						"platform": {
+							"const": "linux"
+						},
+						"mechanism": {
+							"const": "bwrap"
+						}
+					}
+				},
+				{
+					"type": "object",
+					"required": [
+						"kind"
+					],
+					"additionalProperties": false,
+					"properties": {
+						"kind": {
+							"const": "docker"
+						},
+						"image": {
+							"type": "string",
+							"default": "node:22-alpine"
+						},
+						"networkMode": {
+							"enum": [
+								"none",
+								"bridge",
+								"host"
+							],
+							"default": "none"
+						},
+						"readonlyRootfs": {
+							"type": "boolean",
+							"default": true
+						},
+						"mounts": {
+							"type": "array",
+							"items": {
+								"type": "object",
+								"required": [
+									"hostPath",
+									"sandboxPath"
+								],
+								"additionalProperties": false,
+								"properties": {
+									"hostPath": {
+										"type": "string"
+									},
+									"sandboxPath": {
+										"type": "string"
+									},
+									"mode": {
+										"enum": [
+											"readonly",
+											"readwrite"
+										],
+										"default": "readonly"
+									},
+									"persist": {
+										"enum": [
+											"ephemeral",
+											"host"
+										],
+										"default": "host"
+									}
+								}
+							},
+							"default": []
+						},
+						"pullPolicy": {
+							"enum": [
+								"always",
+								"if-missing",
+								"never"
+							],
+							"default": "if-missing"
+						},
+						"memoryMb": {
+							"type": "integer",
+							"minimum": 1
+						},
+						"cpuQuota": {
+							"type": "integer",
+							"minimum": 1
+						},
+						"capDrop": {
+							"type": "array",
+							"items": {
+								"type": "string"
+							},
+							"default": [
+								"ALL"
+							]
+						},
+						"securityOpt": {
+							"type": "array",
+							"items": {
+								"type": "string"
+							},
+							"default": [
+								"no-new-privileges"
+							]
+						},
+						"tmpfs": {
+							"type": "array",
+							"items": {
+								"type": "string"
+							},
+							"default": []
+						}
+					}
+				},
+				{
+					"type": "object",
+					"required": [
+						"kind"
+					],
+					"additionalProperties": false,
+					"properties": {
+						"kind": {
+							"const": "justbash"
+						},
+						"fs": {
+							"enum": [
+								"memory",
+								"overlay",
+								"read-write-root-locked"
+							],
+							"default": "memory"
+						},
+						"allowedBinaries": {
+							"type": "array",
+							"items": {
+								"type": "string"
+							},
+							"default": []
+						},
+						"network": {
+							"oneOf": [
+								{
+									"type": "object",
+									"required": [
+										"mode"
+									],
+									"additionalProperties": false,
+									"properties": {
+										"mode": {
+											"const": "deny",
+											"default": "deny"
+										}
+									}
+								},
+								{
+									"type": "object",
+									"required": [
+										"mode"
+									],
+									"additionalProperties": false,
+									"properties": {
+										"mode": {
+											"const": "allow-all"
+										}
+									}
+								},
+								{
+									"type": "object",
+									"required": [
+										"mode"
+									],
+									"additionalProperties": false,
+									"properties": {
+										"mode": {
+											"const": "restricted"
+										},
+										"default": {
+											"enum": [
+												"deny",
+												"allow"
+											],
+											"default": "deny"
+										},
+										"allowDomains": {
+											"type": "array",
+											"items": {
+												"type": "string"
+											},
+											"default": []
+										},
+										"denyDomains": {
+											"type": "array",
+											"items": {
+												"type": "string"
+											},
+											"default": []
+										},
+										"allowUrlPrefixes": {
+											"type": "array",
+											"items": {
+												"type": "string"
+											},
+											"default": []
+										},
+										"allowPorts": {
+											"type": "array",
+											"items": {
+												"type": "integer",
+												"minimum": 0
+											},
+											"default": []
+										},
+										"allowCidrs": {
+											"type": "array",
+											"items": {
+												"type": "string"
+											},
+											"default": []
+										},
+										"denyPrivateNetworks": {
+											"type": "boolean",
+											"default": true
+										},
+										"denyMetadata": {
+											"type": "boolean",
+											"default": true
+										},
+										"allowUnixSockets": {
+											"type": "boolean",
+											"default": false
+										},
+										"scrubProxyEnv": {
+											"type": "boolean",
+											"default": true
+										},
+										"dns": {
+											"oneOf": [
+												{
+													"const": "deny"
+												},
+												{
+													"const": "system"
+												},
+												{
+													"type": "object",
+													"additionalProperties": false,
+													"properties": {
+														"servers": {
+															"type": "array",
+															"items": {
+																"type": "string"
+															},
+															"default": []
+														}
+													}
+												}
+											],
+											"default": "deny"
+										}
+									}
+								}
+							]
+						},
+						"customCommands": {
+							"type": "object",
+							"additionalProperties": true
+						},
+						"executionLimits": {
+							"type": "object",
+							"additionalProperties": false,
+							"properties": {
+								"maxOutputBytes": {
+									"type": "integer",
+									"minimum": 0,
+									"default": 1048576
+								},
+								"maxRuntimeMs": {
+									"type": "integer",
+									"minimum": 0,
+									"default": 30000
+								}
+							}
+						}
+					}
+				},
+				{
+					"type": "object",
+					"required": [
+						"kind"
+					],
+					"additionalProperties": false,
+					"properties": {
+						"kind": {
+							"const": "qemu"
+						},
+						"assets": {
+							"type": "object",
+							"additionalProperties": true
+						},
+						"cpus": {
+							"type": "integer",
+							"minimum": 1,
+							"default": 1
+						},
+						"memoryMb": {
+							"type": "integer",
+							"minimum": 1,
+							"default": 512
+						},
+						"shareMode": {
+							"enum": [
+								"virtiofs-readonly",
+								"virtiofs-readwrite",
+								"9p-readonly",
+								"9p-readwrite"
+							]
+						},
+						"network": {
+							"enum": [
+								"none",
+								"hostfwd"
+							],
+							"default": "none"
+						},
+						"snapshot": {
+							"type": "boolean",
+							"default": true
+						}
+					}
+				},
+				{
+					"type": "object",
+					"required": [
+						"kind",
+						"host",
+						"username",
+						"auth",
+						"hostVerification",
+						"remoteRoot"
+					],
+					"additionalProperties": false,
+					"properties": {
+						"kind": {
+							"const": "ssh"
+						},
+						"host": {
+							"type": "string"
+						},
+						"port": {
+							"type": "integer",
+							"minimum": 1,
+							"default": 22
+						},
+						"username": {
+							"type": "string"
+						},
+						"auth": {
+							"type": "object",
+							"required": [
+								"kind"
+							],
+							"properties": {
+								"kind": {
+									"type": "string"
+								}
+							},
+							"additionalProperties": true
+						},
+						"hostVerification": {
+							"type": "object",
+							"required": [
+								"strict"
+							],
+							"additionalProperties": false,
+							"properties": {
+								"strict": {
+									"type": "boolean"
+								},
+								"hostHash": {
+									"type": "string"
+								},
+								"knownHostsPath": {
+									"type": "string"
+								}
+							}
+						},
+						"remoteRoot": {
+							"type": "string"
+						},
+						"proxyJump": {
+							"type": "array",
+							"items": {
+								"type": "object"
+							},
+							"default": []
+						}
+					}
+				}
+			]
+		},
+		"fallbackBackends": {
+			"type": "array",
+			"items": {
+				"enum": [
+					"native",
+					"docker",
+					"justbash",
+					"qemu",
+					"ssh"
+				]
+			},
+			"default": []
+		},
+		"backendMissing": {
+			"enum": [
+				"fail",
+				"prompt",
+				"disabled-by-user"
+			],
+			"default": "prompt"
+		},
+		"network": {
+			"oneOf": [
+				{
+					"type": "object",
+					"required": [
+						"mode"
+					],
+					"additionalProperties": false,
+					"properties": {
+						"mode": {
+							"const": "deny",
+							"default": "deny"
+						}
+					}
+				},
+				{
+					"type": "object",
+					"required": [
+						"mode"
+					],
+					"additionalProperties": false,
+					"properties": {
+						"mode": {
+							"const": "allow-all"
+						}
+					}
+				},
+				{
+					"type": "object",
+					"required": [
+						"mode"
+					],
+					"additionalProperties": false,
+					"properties": {
+						"mode": {
+							"const": "restricted"
+						},
+						"default": {
+							"enum": [
+								"deny",
+								"allow"
+							],
+							"default": "deny"
+						},
+						"allowDomains": {
+							"type": "array",
+							"items": {
+								"type": "string"
+							},
+							"default": []
+						},
+						"denyDomains": {
+							"type": "array",
+							"items": {
+								"type": "string"
+							},
+							"default": []
+						},
+						"allowUrlPrefixes": {
+							"type": "array",
+							"items": {
+								"type": "string"
+							},
+							"default": []
+						},
+						"allowPorts": {
+							"type": "array",
+							"items": {
+								"type": "integer",
+								"minimum": 0
+							},
+							"default": []
+						},
+						"allowCidrs": {
+							"type": "array",
+							"items": {
+								"type": "string"
+							},
+							"default": []
+						},
+						"denyPrivateNetworks": {
+							"type": "boolean",
+							"default": true
+						},
+						"denyMetadata": {
+							"type": "boolean",
+							"default": true
+						},
+						"allowUnixSockets": {
+							"type": "boolean",
+							"default": false
+						},
+						"scrubProxyEnv": {
+							"type": "boolean",
+							"default": true
+						},
+						"dns": {
+							"oneOf": [
+								{
+									"const": "deny"
+								},
+								{
+									"const": "system"
+								},
+								{
+									"type": "object",
+									"additionalProperties": false,
+									"properties": {
+										"servers": {
+											"type": "array",
+											"items": {
+												"type": "string"
+											},
+											"default": []
+										}
+									}
+								}
+							],
+							"default": "deny"
+						}
+					}
+				}
+			]
+		},
+		"file": {
+			"type": "object",
+			"additionalProperties": false,
+			"properties": {
+				"defaultRead": {
+					"enum": [
+						"deny",
+						"allow"
+					],
+					"default": "deny"
+				},
+				"defaultWrite": {
+					"enum": [
+						"deny",
+						"allow"
+					],
+					"default": "deny"
+				},
+				"roots": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"required": [
+							"path"
+						],
+						"additionalProperties": false,
+						"properties": {
+							"path": {
+								"type": "string"
+							},
+							"read": {
+								"type": "boolean",
+								"default": true
+							},
+							"write": {
+								"type": "boolean",
+								"default": false
+							},
+							"create": {
+								"type": "boolean",
+								"default": false
+							},
+							"delete": {
+								"type": "boolean",
+								"default": false
+							},
+							"persist": {
+								"enum": [
+									"ephemeral",
+									"host"
+								],
+								"default": "ephemeral"
+							},
+							"followSymlinks": {
+								"type": "boolean",
+								"default": false
+							}
+						}
+					},
+					"default": []
+				},
+				"denySpecialPaths": {
+					"type": "array",
+					"items": {
+						"type": "string"
+					},
+					"default": [
+						"/proc",
+						"/sys",
+						"/dev"
+					]
+				},
+				"denyMagicLinks": {
+					"type": "boolean",
+					"default": true
+				},
+				"highRiskWriteClasses": {
+					"type": "array",
+					"items": {
+						"enum": [
+							"dotenv",
+							"ssh-key",
+							"git-hook",
+							"shell-rc",
+							"npm-script",
+							"executable"
+						]
+					}
+				},
+				"maxReadBytes": {
+					"type": "integer",
+					"minimum": 0,
+					"default": 10485760
+				}
+			}
+		},
+		"process": {
+			"type": "object",
+			"additionalProperties": false,
+			"properties": {
+				"isolation": {
+					"type": "boolean",
+					"default": true
+				},
+				"gitHooks": {
+					"enum": [
+						"deny",
+						"allow",
+						"prompt"
+					],
+					"default": "prompt"
+				},
+				"seccompProfile": {
+					"type": "string"
+				},
+				"capDrop": {
+					"type": "array",
+					"items": {
+						"type": "string"
+					},
+					"default": []
+				}
+			}
+		},
+		"env": {
+			"type": "object",
+			"additionalProperties": false
+		},
+		"approvals": {
+			"type": "object",
+			"additionalProperties": false
+		},
+		"tui": {
+			"type": "object",
+			"additionalProperties": false
+		},
+		"agentAwareness": {
+			"type": "object",
+			"additionalProperties": false
+		},
+		"audit": {
+			"type": "object",
+			"additionalProperties": false
+		}
+	}
 }

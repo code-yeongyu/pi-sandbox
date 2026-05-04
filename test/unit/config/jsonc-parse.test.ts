@@ -73,10 +73,10 @@ describe("parseJsonc", () => {
 	it("#given jsonc text #when modified #then existing comments are preserved", () => {
 		const text = '{\n\t// network policy\n\t"network": { "mode": "deny" }\n}\n';
 
-		const modified = modifyJsonc(text, ["backendUnavailable"], "fail");
+		const modified = modifyJsonc(text, ["backendMissing"], "fail");
 
 		expect(modified).toContain("// network policy");
-		expect(modified).toContain("backendUnavailable");
+		expect(modified).toContain("backendMissing");
 	});
 
 	it("#given jsonc text #when modified #then output parses without duplicate keys", () => {

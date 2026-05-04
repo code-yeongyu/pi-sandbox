@@ -139,7 +139,6 @@ export const QemuUserConfigSchema = z
 		kind: z.literal("user"),
 		kernelPath: z.string(),
 		initrdPath: z.string(),
-		rootImagePath: z.string().optional(),
 	})
 	.strict()
 	.readonly();
@@ -215,8 +214,7 @@ export type SshHostVerificationConfig = z.infer<typeof SshHostVerificationConfig
 
 export type NativeBackendConfig =
 	| { readonly kind: "native"; readonly platform: "darwin"; readonly mechanism: "sandbox-exec" }
-	| { readonly kind: "native"; readonly platform: "linux"; readonly mechanism: "bwrap" | "landlock-experimental" }
-	| { readonly kind: "native"; readonly platform: "win32"; readonly mechanism: "appcontainer" | "wsl2-bwrap" };
+	| { readonly kind: "native"; readonly platform: "linux"; readonly mechanism: "bwrap" };
 
 export type DockerBackendConfig = {
 	readonly kind: "docker";
@@ -236,7 +234,6 @@ export type JustbashBackendConfig = {
 	readonly kind: "justbash";
 	readonly fs: "memory" | "overlay" | "read-write-root-locked";
 	readonly allowedBinaries: readonly string[];
-	readonly allowedLibraries: readonly string[];
 	readonly network?: NetworkPolicy;
 	readonly customCommands?: Readonly<Record<string, JustbashCustomCommand>>;
 	readonly executionLimits: { readonly maxOutputBytes: number; readonly maxRuntimeMs: number };
@@ -260,7 +257,6 @@ export type SshBackendConfig = {
 	readonly auth: SshAuthConfig;
 	readonly hostVerification: SshHostVerificationConfig;
 	readonly remoteRoot: string;
-	readonly sync: "rsync" | "sftp";
 	readonly proxyJump: readonly SshBackendConfig[];
 };
 
@@ -285,15 +281,7 @@ const NativeBackendConfigSchema = z.discriminatedUnion("platform", [
 		.object({
 			kind: z.literal("native"),
 			platform: z.literal("linux"),
-			mechanism: z.enum(["bwrap", "landlock-experimental"]),
-		})
-		.strict()
-		.readonly(),
-	z
-		.object({
-			kind: z.literal("native"),
-			platform: z.literal("win32"),
-			mechanism: z.enum(["appcontainer", "wsl2-bwrap"]),
+			mechanism: z.literal("bwrap"),
 		})
 		.strict()
 		.readonly(),
@@ -321,7 +309,6 @@ const JustbashBackendConfigSchema = z
 		kind: z.literal("justbash"),
 		fs: z.enum(["memory", "overlay", "read-write-root-locked"]),
 		allowedBinaries: z.array(z.string()).readonly(),
-		allowedLibraries: z.array(z.string()).readonly(),
 		network: NetworkPolicySchema.optional(),
 		customCommands: z.record(z.string(), JustbashCustomCommandSchema).readonly().optional(),
 		executionLimits: z
@@ -358,7 +345,6 @@ export const SshBackendConfigSchema: z.ZodType<SshBackendConfig> = z.lazy(() =>
 			auth: SshAuthConfigSchema,
 			hostVerification: SshHostVerificationConfigSchema,
 			remoteRoot: z.string(),
-			sync: z.enum(["rsync", "sftp"]),
 			proxyJump: z.array(SshBackendConfigSchema).readonly(),
 		})
 		.strict()
@@ -410,7 +396,7 @@ export const DesiredPolicySchema = z
 	.object({
 		backend: DesiredBackendConfigSchema,
 		fallbackBackends: z.array(BackendKindSchema).readonly(),
-		backendUnavailable: z.enum(["fail", "prompt", "disabled-by-user"]),
+		backendMissing: z.enum(["fail", "prompt", "disabled-by-user"]),
 		network: NetworkPolicySchema,
 		file: FilePolicySchema,
 		process: ProcessPolicySchema,

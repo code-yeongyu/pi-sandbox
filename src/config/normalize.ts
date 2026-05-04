@@ -14,17 +14,16 @@ function normalizeNetwork(
 	network: NetworkPolicy,
 	backendState: EffectiveBackendState,
 ): { readonly network: NetworkPolicy; readonly backend: EffectiveBackendState } {
-	const allowlistUnsupported =
-		!backendState.capabilities.networkAllowlist || !backendState.capabilities.networkGateway;
-	if (network.mode !== "restricted" || !allowlistUnsupported) return { network, backend: backendState };
+	const allowlistMissing = !backendState.capabilities.networkAllowlist || !backendState.capabilities.networkGateway;
+	if (network.mode !== "restricted" || !allowlistMissing) return { network, backend: backendState };
 	return {
-		network: { mode: "deny" },
+		network,
 		backend: {
 			...backendState,
-			unsupportedControls: [...new Set([...backendState.unsupportedControls, "networkAllowlist" as const])],
+			omittedControls: [...new Set([...backendState.omittedControls, "networkAllowlist" as const])],
 			diagnostics: [
 				...backendState.diagnostics,
-				"restricted network policy requires a gateway-capable backend; forced network mode to deny",
+				"restricted network policy requires a gateway-capable backend; session start fails for this config",
 			],
 		},
 	};

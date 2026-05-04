@@ -140,18 +140,68 @@ describe("SandboxConfigSchema", () => {
 		expect(config.backend.mounts[0]?.mode).toBe("readonly");
 	});
 
-	it("#given generated json schema #when parsed #then top-level config properties are present", async () => {
+	it("#given removed backend schema fiction #when parsed #then strict schema rejects it", () => {
+		expect(parseSandboxConfig({ backend: { kind: "justbash", allowedLibraries: ["libc"] } }).ok).toBe(false);
+		expect(
+			parseSandboxConfig({
+				backend: {
+					kind: "qemu",
+					assets: { kind: "user", kernelPath: "kernel", initrdPath: "initrd", rootImagePath: "rootfs" },
+				},
+			}).ok,
+		).toBe(false);
+		expect(
+			parseSandboxConfig({
+				backend: {
+					kind: "ssh",
+					host: "example.invalid",
+					username: "sandbox",
+					auth: { kind: "kbi" },
+					hostVerification: { strict: true },
+					remoteRoot: "/tmp/pi-sandbox",
+					sync: "sftp",
+				},
+			}).ok,
+		).toBe(false);
+	});
+
+	it("#given generated json schema #when parsed #then backend network and file shapes are present", async () => {
 		const text = await readFile("schema/sandbox.schema.json", "utf8");
 
 		const parsed = parseJsonc(text);
 
 		expect(parsed.ok).toBe(true);
 		if (!parsed.ok) return;
-		expect(String(parsed.value)).not.toHaveLength(0);
+		const schema = objectValue(parsed.value);
+		const properties = objectProperty(schema, "properties");
+		const backend = objectProperty(properties, "backend");
+		const network = objectProperty(properties, "network");
+		const file = objectProperty(properties, "file");
+
+		expect(arrayProperty(backend, "oneOf").length).toBeGreaterThan(3);
+		expect(arrayProperty(network, "oneOf").length).toBe(3);
+		expect(objectProperty(file, "properties")).toHaveProperty("roots");
 	});
 
 	it("#given top-level key set #when inspected #then locked sections are included", () => {
-		expect(SandboxConfigTopLevelKeys.has("backendUnavailable")).toBe(true);
+		expect(SandboxConfigTopLevelKeys.has("backendMissing")).toBe(true);
 		expect(SandboxConfigTopLevelKeys.has("grants")).toBe(false);
 	});
 });
+
+function objectValue(value: unknown): Readonly<Record<string, unknown>> {
+	if (typeof value === "object" && value !== null && !Array.isArray(value)) {
+		return value as Readonly<Record<string, unknown>>;
+	}
+	throw new Error("Expected object value");
+}
+
+function objectProperty(value: Readonly<Record<string, unknown>>, key: string): Readonly<Record<string, unknown>> {
+	return objectValue(value[key]);
+}
+
+function arrayProperty(value: Readonly<Record<string, unknown>>, key: string): readonly unknown[] {
+	const property = value[key];
+	if (Array.isArray(property)) return property;
+	throw new Error(`Expected array property ${key}`);
+}

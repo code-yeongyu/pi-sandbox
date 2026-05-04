@@ -12,7 +12,7 @@ import type { DesiredPolicy } from "../../../src/policy/desired.js";
 const desiredPolicy = {
 	backend: { kind: "auto" },
 	fallbackBackends: [],
-	backendUnavailable: "prompt",
+	backendMissing: "prompt",
 	file: {
 		defaultRead: "deny",
 		defaultWrite: "deny",
@@ -73,7 +73,7 @@ describe("config hashes", () => {
 	});
 
 	it("#given different desired policy #when hashed #then hash changes", () => {
-		const changed = { ...desiredPolicy, backendUnavailable: "fail" } satisfies DesiredPolicy;
+		const changed = { ...desiredPolicy, backendMissing: "fail" } satisfies DesiredPolicy;
 
 		expect(computeDesiredPolicyHash(changed)).not.toBe(computeDesiredPolicyHash(desiredPolicy));
 	});

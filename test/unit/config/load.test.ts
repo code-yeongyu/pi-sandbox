@@ -43,24 +43,24 @@ describe("config loading", () => {
 	});
 
 	it("#given legacy global config #when primary missing #then legacy config is loaded", async () => {
-		await writeText(join(testHome, ".pi", "agent", "sandbox.json"), '{ "backendUnavailable": "fail" }');
+		await writeText(join(testHome, ".pi", "agent", "sandbox.json"), '{ "backendMissing": "fail" }');
 
 		const result = await loadGlobalConfig();
 
 		expect(result.ok).toBe(true);
 		if (!result.ok) return;
-		expect(result.value.backendUnavailable).toBe("fail");
+		expect(result.value.backendMissing).toBe("fail");
 	});
 
 	it("#given primary global config #when legacy exists #then primary config wins", async () => {
-		await writeText(join(testHome, ".pi", "sandbox.json"), '{ "backendUnavailable": "prompt" }');
-		await writeText(join(testHome, ".pi", "agent", "sandbox.json"), '{ "backendUnavailable": "fail" }');
+		await writeText(join(testHome, ".pi", "sandbox.json"), '{ "backendMissing": "prompt" }');
+		await writeText(join(testHome, ".pi", "agent", "sandbox.json"), '{ "backendMissing": "fail" }');
 
 		const result = await loadGlobalConfig();
 
 		expect(result.ok).toBe(true);
 		if (!result.ok) return;
-		expect(result.value.backendUnavailable).toBe("prompt");
+		expect(result.value.backendMissing).toBe("prompt");
 	});
 
 	it("#given valid project config #when loaded #then project config is parsed", async () => {
@@ -74,14 +74,14 @@ describe("config loading", () => {
 	});
 
 	it("#given valid global and project configs #when full config loaded #then configs are merged", async () => {
-		await writeText(join(testHome, ".pi", "sandbox.json"), '{ "backendUnavailable": "prompt" }');
-		await writeText(join(testProject, ".pi", "sandbox.json"), '{ "backendUnavailable": "fail" }');
+		await writeText(join(testHome, ".pi", "sandbox.json"), '{ "backendMissing": "prompt" }');
+		await writeText(join(testProject, ".pi", "sandbox.json"), '{ "backendMissing": "fail" }');
 
 		const result = await loadFullConfig(testProject);
 
 		expect(result.ok).toBe(true);
 		if (!result.ok) return;
-		expect(result.value.merged.backendUnavailable).toBe("fail");
+		expect(result.value.merged.backendMissing).toBe("fail");
 	});
 
 	it("#given parse error #when project config loaded #then parse load error is returned", async () => {

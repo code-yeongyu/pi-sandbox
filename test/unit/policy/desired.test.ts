@@ -164,7 +164,6 @@ describe("DesiredBackendConfig", () => {
 			auth: { kind: "agent", sock: "/tmp/agent.sock" },
 			hostVerification: { strict: true, hostHash: "sha256:abc" },
 			remoteRoot: "/srv/sandbox",
-			sync: "rsync",
 			proxyJump: [
 				{
 					kind: "ssh",
@@ -174,7 +173,6 @@ describe("DesiredBackendConfig", () => {
 					auth: { kind: "kbi" },
 					hostVerification: { strict: true, knownHostsPath: "~/.ssh/known_hosts" },
 					remoteRoot: "/srv/bastion",
-					sync: "sftp",
 					proxyJump: [],
 				},
 			],
@@ -194,7 +192,7 @@ describe("DesiredPolicy", () => {
 		const policy = {
 			backend: { kind: "auto" },
 			fallbackBackends: ["docker", "justbash"],
-			backendUnavailable: "prompt",
+			backendMissing: "prompt",
 			network: { mode: "deny" },
 			file: filePolicy,
 			process: processPolicy,

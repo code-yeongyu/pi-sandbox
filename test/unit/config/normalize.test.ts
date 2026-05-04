@@ -44,7 +44,7 @@ function backendState(capabilities: BackendCapability = gatewayCapability): Effe
 		status: "available",
 		capabilities,
 		effectiveControls,
-		unsupportedControls: [],
+		omittedControls: [],
 		probeResults: [{ kind: "passed", evidence: "ok", control: "processIsolation" }],
 		diagnostics: [],
 	};
@@ -81,7 +81,7 @@ describe("normalizeConfig", () => {
 		expect(Object.isFrozen(policy.file)).toBe(true);
 	});
 
-	it("#given unsupported network allowlist #when restricted network normalized #then network is forced to deny", () => {
+	it("#given omitted network allowlist #when restricted network normalized #then restricted network is preserved", () => {
 		const capability = { ...gatewayCapability, networkAllowlist: false } satisfies BackendCapability;
 
 		const policy = normalizeConfig(
@@ -89,10 +89,10 @@ describe("normalizeConfig", () => {
 			backendState(capability),
 		);
 
-		expect(policy.network).toEqual({ mode: "deny" });
+		expect(policy.network.mode).toBe("restricted");
 	});
 
-	it("#given unsupported network allowlist #when normalized #then diagnostic is added", () => {
+	it("#given omitted network allowlist #when normalized #then failure diagnostic is added", () => {
 		const capability = { ...gatewayCapability, networkAllowlist: false } satisfies BackendCapability;
 
 		const policy = normalizeConfig(
@@ -100,10 +100,10 @@ describe("normalizeConfig", () => {
 			backendState(capability),
 		);
 
-		expect(policy.backend.diagnostics[0]).toContain("forced network mode to deny");
+		expect(policy.backend.diagnostics[0]).toContain("session start fails");
 	});
 
-	it("#given unsupported network allowlist #when normalized #then unsupported control is marked", () => {
+	it("#given omitted network allowlist #when normalized #then omitted control is marked", () => {
 		const capability = { ...gatewayCapability, networkAllowlist: false } satisfies BackendCapability;
 
 		const policy = normalizeConfig(
@@ -111,7 +111,7 @@ describe("normalizeConfig", () => {
 			backendState(capability),
 		);
 
-		expect(policy.backend.unsupportedControls).toContain("networkAllowlist");
+		expect(policy.backend.omittedControls).toContain("networkAllowlist");
 	});
 
 	it("#given gateway-capable backend #when restricted network normalized #then restricted network is preserved", () => {

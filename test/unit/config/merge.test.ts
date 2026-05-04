@@ -24,13 +24,13 @@ describe("mergeConfigs", () => {
 		expect(mergeConfigs([layer("global", {})])).toEqual({});
 	});
 
-	it("#given scalar backendUnavailable #when project overrides global #then later wins", () => {
+	it("#given scalar backendMissing #when project overrides global #then later wins", () => {
 		const merged = mergeConfigs([
-			layer("global", { backendUnavailable: "prompt" }),
-			layer("project", { backendUnavailable: "fail" }),
+			layer("global", { backendMissing: "prompt" }),
+			layer("project", { backendMissing: "fail" }),
 		]);
 
-		expect(merged.backendUnavailable).toBe("fail");
+		expect(merged.backendMissing).toBe("fail");
 	});
 
 	it("#given session scalar #when merged after project #then session wins", () => {
