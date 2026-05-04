@@ -27,7 +27,7 @@ describe("PathMapper", () => {
 
 		// then
 		expect(result).toEqual({ ok: true, value: "/workspace/file.txt" });
-		expectTypeOf<PathMappingError>().toMatchTypeOf<
+		expectTypeOf<PathMappingError>().toExtend<
 			| { readonly kind: "outside-sandbox"; readonly hostPath: string }
 			| { readonly kind: "non-representable"; readonly hostPath: string; readonly reason: string }
 			| { readonly kind: "case-collision"; readonly hostPath: string }
