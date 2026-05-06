@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { BackendCapability } from "../../../src/policy/capability.js";
-import type { BackendAvailability } from "../../../src/sandbox/availability.js";
+import { type BackendAvailability, BackendAvailabilitySchema } from "../../../src/sandbox/availability.js";
 
 const capabilities = {
 	fileRead: true,
@@ -77,5 +77,52 @@ describe("BackendAvailability", () => {
 
 		// when / then
 		expect(availability.probeResults[0]?.kind).toBe("failed");
+	});
+
+	it("#given valid availability variants #when parsed #then schema accepts each status", () => {
+		// given
+		const variants = [
+			{ status: "available", backend: "docker", capabilities },
+			{
+				status: "degraded",
+				backend: "ssh",
+				capabilities,
+				omittedControls: ["denialAttribution"],
+				reason: "Remote guard is not installed.",
+			},
+			{ status: "experimental", backend: "native", capabilities, reason: "Landlock support is experimental." },
+			{
+				status: "missing",
+				backend: "qemu",
+				reason: "qemu-system-x86_64 missing",
+				probeResults: [
+					{
+						kind: "failed",
+						command: "qemu-system-x86_64 --version",
+						exitCode: 127,
+						reason: "binary not found",
+						control: "processIsolation",
+					},
+				],
+			},
+		] as const;
+
+		// when / then
+		for (const variant of variants) expect(BackendAvailabilitySchema.safeParse(variant).success).toBe(true);
+	});
+
+	it("#given extra keys empty omissions or invalid status #when parsed #then schema rejects invalid availability", () => {
+		// given
+		const invalidAvailability = [
+			{ status: "available", backend: "docker", capabilities, extra: true },
+			{ status: "degraded", backend: "ssh", capabilities, omittedControls: [], reason: "missing controls" },
+			{ status: "missing", backend: "qemu", reason: "missing probes" },
+			{ status: "offline", backend: "docker", capabilities },
+		] as const;
+
+		// when / then
+		for (const invalidValue of invalidAvailability) {
+			expect(BackendAvailabilitySchema.safeParse(invalidValue).success).toBe(false);
+		}
 	});
 });

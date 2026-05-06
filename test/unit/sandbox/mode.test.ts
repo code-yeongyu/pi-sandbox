@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { BackendCapability } from "../../../src/policy/capability.js";
-import type { SandboxMode } from "../../../src/sandbox/mode.js";
+import { type SandboxMode, SandboxModeSchema } from "../../../src/sandbox/mode.js";
 
 const capabilities = {
 	fileRead: true,
@@ -61,5 +61,35 @@ describe("SandboxMode", () => {
 
 		// when / then
 		expect(visibleStatus(mode)).toBe("missing:sandbox-exec missing");
+	});
+
+	it("#given valid mode variants #when parsed #then schema accepts each discriminator", () => {
+		// given
+		const variants = [
+			{ kind: "enforcing", backend: "docker", capabilities },
+			{
+				kind: "disabled-by-user",
+				approvalId: "approval-1",
+				scope: "project",
+				visibleReason: "User disabled project enforcement.",
+			},
+			{ kind: "missing", backend: "native", reason: "sandbox-exec missing" },
+		] as const;
+
+		// when / then
+		for (const variant of variants) expect(SandboxModeSchema.safeParse(variant).success).toBe(true);
+	});
+
+	it("#given extra keys or invalid discriminator #when parsed #then schema rejects invalid modes", () => {
+		// given
+		const invalidModes = [
+			{ kind: "enforcing", backend: "docker", capabilities, extra: true },
+			{ kind: "disabled-by-user", approvalId: "approval-1", scope: "global", visibleReason: "invalid scope" },
+			{ kind: "paused", reason: "invalid discriminator" },
+			{ kind: "missing" },
+		] as const;
+
+		// when / then
+		for (const invalidMode of invalidModes) expect(SandboxModeSchema.safeParse(invalidMode).success).toBe(false);
 	});
 });
