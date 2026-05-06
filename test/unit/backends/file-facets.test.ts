@@ -89,6 +89,24 @@ describe("backend file facets", () => {
 		}
 	});
 
+	it("#given shell file path contains apostrophe #when read facet runs #then generated command shell-quotes the path", async () => {
+		const commands: string[] = [];
+		const facets = createShellFileFacets("docker", quotedPathMapper(), {
+			exec: async (command, options) => {
+				commands.push(command);
+				options.onData?.(Buffer.from("cXVvdGVkLXBhdGg=\n", "utf8"));
+				return ok({ exitCode: 0 });
+			},
+		});
+
+		const result = await facets.read.readFile("/host/project/quote's.txt");
+
+		expect(result.ok).toBe(true);
+		if (!result.ok) throw new Error(result.error.remediation);
+		expect(result.value.toString("utf8")).toBe("quoted-path");
+		expect(commands).toEqual(["base64 < '/workspace/quote'\\''s.txt'"]);
+	});
+
 	it("#given ssh backend factory #when backend is created #then shell file facets are exposed", async () => {
 		const backend = await createSshBackend(sshConfig, "/host/project");
 
@@ -201,6 +219,21 @@ function nestedWritePathMapper(root: string): PathMapper {
 			return { ok: false, error: { kind: "non-representable", hostPath: sandboxPath, reason: "outside root" } };
 		},
 		canRepresent: (hostPath) => path.resolve(hostPath) === path.join(root, "new", "file.txt"),
+	};
+}
+
+function quotedPathMapper(): PathMapper {
+	return {
+		hostToSandboxPath: (hostPath) => {
+			if (hostPath === "/host/project/quote's.txt") return { ok: true, value: "/workspace/quote's.txt" };
+			return { ok: false, error: { kind: "outside-sandbox", hostPath } };
+		},
+		sandboxToHostPath: (sandboxPath) => {
+			if (sandboxPath === "/workspace") return { ok: true, value: "/host/project" };
+			if (sandboxPath === "/workspace/quote's.txt") return { ok: true, value: "/host/project/quote's.txt" };
+			return { ok: false, error: { kind: "non-representable", hostPath: sandboxPath, reason: "outside" } };
+		},
+		canRepresent: (hostPath) => hostPath === "/host/project/quote's.txt",
 	};
 }
 
