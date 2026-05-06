@@ -1,9 +1,9 @@
 import type { ApprovalStore } from "../approvals/store.js";
-import type { ExtensionAPI } from "../pi/index.js";
 import type { SandboxManager } from "../sandbox/manager.js";
 import { parseGrantArgs, persistProjectGrant } from "./grants.js";
+import type { CommandRegistrar } from "./types.js";
 
-export function registerSandboxDenyCommand(pi: ExtensionAPI, manager: SandboxManager, _store: ApprovalStore): void {
+export function registerSandboxDenyCommand(pi: CommandRegistrar, manager: SandboxManager, _store: ApprovalStore): void {
 	pi.registerCommand("sandbox-deny", {
 		description: "Persist a typed pi-sandbox deny grant",
 		handler: async (args, ctx) => {

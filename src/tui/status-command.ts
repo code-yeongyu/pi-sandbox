@@ -1,9 +1,16 @@
 import type { ApprovalStore } from "../approvals/store.js";
 import { toTuiWidget } from "../explain/render-tui.js";
-import type { SandboxManager } from "../sandbox/manager.js";
+import type { EffectivePolicy } from "../policy/effective.js";
+import type { SandboxMode } from "../sandbox/mode.js";
 import type { SandboxBlockV1 } from "../security/failure.js";
 
-export function formatSandboxStatus(manager: SandboxManager, store: ApprovalStore): string {
+export type SandboxStatusManager = {
+	readonly getEffectivePolicy: () => EffectivePolicy;
+	readonly getMode: () => SandboxMode;
+	readonly getRecentBlocks: () => readonly SandboxBlockV1[];
+};
+
+export function formatSandboxStatus(manager: SandboxStatusManager, store: ApprovalStore): string {
 	const effectivePolicy = manager.getEffectivePolicy();
 	const recentBlocks = manager.getRecentBlocks();
 	return [

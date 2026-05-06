@@ -1,9 +1,8 @@
 import type { ApprovalStore } from "../approvals/store.js";
-import type { ExtensionAPI } from "../pi/index.js";
 import { BackendKindSchema } from "../policy/desired.js";
-import type { SandboxManager } from "../sandbox/manager.js";
+import type { CommandRegistrar } from "./types.js";
 
-export function registerSandboxSwitchCommand(pi: ExtensionAPI, _manager: SandboxManager, _store: ApprovalStore): void {
+export function registerSandboxSwitchCommand(pi: CommandRegistrar, _manager: object, _store: ApprovalStore): void {
 	pi.registerCommand("sandbox-switch", {
 		description: "Validate a pi-sandbox backend switch",
 		handler: async (args, ctx) => {

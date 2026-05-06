@@ -1,9 +1,12 @@
 import type { ApprovalStore } from "../approvals/store.js";
-import type { ExtensionAPI } from "../pi/index.js";
-import type { SandboxManager } from "../sandbox/manager.js";
-import { formatSandboxStatus } from "../tui/status-command.js";
+import { formatSandboxStatus, type SandboxStatusManager } from "../tui/status-command.js";
+import type { CommandRegistrar } from "./types.js";
 
-export function registerSandboxCommand(pi: ExtensionAPI, manager: SandboxManager, store: ApprovalStore): void {
+export function registerSandboxCommand(
+	pi: CommandRegistrar,
+	manager: SandboxStatusManager,
+	store: ApprovalStore,
+): void {
 	pi.registerCommand("sandbox", {
 		description: "Show pi-sandbox help and status summary",
 		handler: async (_args, ctx) => {
