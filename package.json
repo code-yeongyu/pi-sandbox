@@ -53,7 +53,7 @@
 	"dependencies": {
 		"dockerode": "latest",
 		"jsonc-parser": "latest",
-		"just-bash": "^2.14.3",
+		"just-bash": "^2.14.5",
 		"ssh2": "latest",
 		"zod": "latest"
 	},
