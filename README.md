@@ -115,3 +115,9 @@ See [docs/SECURITY.md](docs/SECURITY.md) for the threat model, block codes, and 
 ## License
 
 MIT. See [LICENSE](LICENSE) and [NOTICE](NOTICE).
+
+## Related
+
+- [senpi](https://github.com/code-yeongyu/senpi) — the fork/runtime these extensions are extracted from.
+- [Ultraworkers Discord](https://discord.gg/PUwSMR9XNk) — community link from the senpi README.
+- [Dori](https://sisyphuslabs.ai) — the product powered by senpi under the hood.
