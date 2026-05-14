@@ -2,7 +2,8 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { decide, type SandboxOperation } from "../../../src/policy/decision.js";
+import { decide } from "../../../src/policy/decision.js";
+import type { SandboxOperation } from "../../../src/sandbox/operation.js";
 import { makeEffectivePolicy } from "../helpers/effective-policy.js";
 
 function decideOperation(operation: SandboxOperation, approvals: readonly string[] = []) {

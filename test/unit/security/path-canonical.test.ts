@@ -18,7 +18,7 @@ describe("canonicalizePath", () => {
 		const result = await canonicalizePath(file, { followSymlinks: true });
 		expect(result.ok).toBe(true);
 		if (!result.ok) return;
-		expect(result.value.residualToctoeRisk).toBe(true);
+		expect(result.value.residualToctouRisk).toBe(true);
 	});
 
 	it("#given symlink and follow disabled #when canonicalized #then non representable is returned", async () => {

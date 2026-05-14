@@ -20,6 +20,7 @@ const SECRET_NAME_PATTERN =
 
 export function buildEnv(policy: EnvPolicy, parentEnv: NodeJS.ProcessEnv): ReadonlyMap<string, string> {
 	const entries = new Map<string, string>();
+	const denyPatterns = compilePolicyPatterns(policy.denyPatterns);
 	if (!policy.clearenv) {
 		for (const [name, value] of Object.entries(parentEnv)) {
 			if (value !== undefined) entries.set(name, value);
@@ -29,7 +30,7 @@ export function buildEnv(policy: EnvPolicy, parentEnv: NodeJS.ProcessEnv): Reado
 	for (const [name, value] of Object.entries(parentEnv)) {
 		if (value === undefined) continue;
 		if (!policy.allowlist.includes(name)) continue;
-		if (matchesAnyPolicyPattern(name, policy.denyPatterns)) continue;
+		if (matchesAnyPolicyPattern(name, denyPatterns)) continue;
 		entries.set(name, value);
 	}
 
@@ -51,8 +52,9 @@ export function filterExplicitEnv(
 	defaultEnv: NodeJS.ProcessEnv = process.env,
 ): ReadonlyMap<string, string> {
 	const entries = new Map<string, string>();
+	const denyPatterns = compilePolicyPatterns(policy.denyPatterns);
 	for (const [name, value] of explicitEnv) {
-		if (matchesAnyPolicyPattern(name, policy.denyPatterns)) continue;
+		if (matchesAnyPolicyPattern(name, denyPatterns)) continue;
 		if (policy.scrubProxyEnv && PROXY_KEYS.has(name)) continue;
 		entries.set(name, value);
 	}
@@ -73,8 +75,12 @@ function sandboxPath(): string {
 	return ["/usr/local/bin", "/usr/bin", "/bin"].join(":");
 }
 
-function matchesAnyPolicyPattern(name: string, patterns: readonly string[]): boolean {
-	return patterns.some((pattern) => wildcardPatternToRegExp(pattern).test(name));
+function matchesAnyPolicyPattern(name: string, patterns: readonly RegExp[]): boolean {
+	return patterns.some((pattern) => pattern.test(name));
+}
+
+function compilePolicyPatterns(patterns: readonly string[]): readonly RegExp[] {
+	return patterns.map(wildcardPatternToRegExp);
 }
 
 function wildcardPatternToRegExp(pattern: string): RegExp {

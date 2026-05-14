@@ -116,7 +116,7 @@ class QemuSandboxBackend implements SandboxBackend {
 			options.signal?.removeEventListener("abort", abort);
 		});
 		if (!result.ok) return result;
-		if (timedOut) return { ok: true, value: { exitCode: 124 } };
+		if (timedOut) return { ok: false, error: timeoutFailure(timeoutMs) };
 		if (abortRequested || options.signal?.aborted) return { ok: true, value: { exitCode: 130 } };
 		const guestExit = guestExitCode(output, exitMarker);
 		return { ok: true, value: { exitCode: guestExit ?? result.value.exitCode } };
@@ -464,6 +464,22 @@ function qemuFailure(
 				: code === "backend_probe_failed"
 					? { probeName: operation, probeOutput: message }
 					: { backendMessage: message }),
+	});
+}
+
+function timeoutFailure(timeoutMs: number): SandboxFailure {
+	return createBlock({
+		version: 1,
+		code: "timeout",
+		policyArea: "backend",
+		operation: "bash.exec",
+		sanitizedTarget: "qemu",
+		matchedRule: "execution.timeout",
+		backend: "qemu",
+		policyHash: "uninitialized",
+		policyRevision: 0,
+		remediation: "Increase the command timeout or run a shorter command.",
+		timeoutMs,
 	});
 }
 

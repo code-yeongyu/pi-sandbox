@@ -1,5 +1,10 @@
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
 import { describe, expect, it } from "vitest";
 
+import { typedGrantRequestId } from "../../../src/approvals/store.js";
 import type { DesiredBackendConfig } from "../../../src/policy/desired.js";
 import type { SandboxBackend } from "../../../src/sandbox/backend.js";
 import { BackendRegistry } from "../../../src/sandbox/backend-registry.js";
@@ -47,6 +52,24 @@ function registryWithBackend(backend: SandboxBackend): BackendRegistry {
 	const registry = new BackendRegistry();
 	registry.register("justbash", async (_config: DesiredBackendConfig) => ok(backend));
 	return registry;
+}
+
+async function withProject<TValue>(callback: (projectPath: string) => Promise<TValue>): Promise<TValue> {
+	const projectPath = await mkdtemp(join(tmpdir(), "pi-sandbox-manager-"));
+	try {
+		return await callback(projectPath);
+	} finally {
+		await rm(projectPath, { recursive: true, force: true });
+	}
+}
+
+async function writeProjectGrant(
+	projectPath: string,
+	grant: { readonly action: "allow" | "deny"; readonly requestId: string },
+): Promise<void> {
+	const grantPath = join(projectPath, ".pi", "sandbox.grants.jsonc");
+	await mkdir(join(grantPath, ".."), { recursive: true });
+	await writeFile(grantPath, JSON.stringify([{ ...grant, scope: "project" }]));
 }
 
 describe("SandboxManager", () => {
@@ -185,6 +208,30 @@ describe("SandboxManager", () => {
 		);
 		expect(result.ok).toBe(false);
 		expect(called).toBe(false);
+	});
+
+	it("#given file read grant for sibling prefix #when reading outside path boundary #then executor is not called", async () => {
+		await withProject(async (projectPath) => {
+			let called = false;
+			await writeProjectGrant(projectPath, {
+				action: "allow",
+				requestId: typedGrantRequestId("file.read", "/tmp/foo"),
+			});
+			const manager = new SandboxManager(registryWithBackend(fakeBackend()), makeEffectivePolicy(), {
+				cwd: projectPath,
+			});
+			await manager.init();
+			const reload = await manager.reloadEffectivePolicy();
+			expect(reload.ok).toBe(true);
+
+			const result = await manager.run({ kind: "fs.read", path: "/tmp/foobar" }, async () => {
+				called = true;
+				return ok("ran");
+			});
+
+			expect(result.ok).toBe(false);
+			expect(called).toBe(false);
+		});
 	});
 
 	it("#given prompt decision #when run #then approval required failure is returned", async () => {

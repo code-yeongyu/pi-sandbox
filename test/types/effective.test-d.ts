@@ -1,4 +1,5 @@
 import { expectTypeOf } from "expect-type";
+import type { SandboxControl } from "../../src/policy/capability.js";
 import type {
 	ControlEvidence,
 	ControlState,
@@ -8,7 +9,6 @@ import type {
 	HealthResult,
 	ProbeResult,
 } from "../../src/policy/effective.js";
-import type { SandboxControl } from "../../src/security/failure.js";
 
 expectTypeOf<ControlState>().toEqualTypeOf<"enforced" | "simulated" | "unverified" | "omitted">();
 expectTypeOf<ControlEvidence["state"]>().toEqualTypeOf<ControlState>();

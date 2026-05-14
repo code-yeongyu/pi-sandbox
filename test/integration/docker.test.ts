@@ -152,6 +152,26 @@ describe("docker host config hardening", () => {
 		expect(result.value.HostConfig?.IpcMode).toBeUndefined();
 		expect(result.value.HostConfig?.Binds?.some((bind) => bind.includes("/var/run/docker.sock"))).toBe(false);
 	});
+
+	it("#given custom Docker hardening config #when options are built #then configured controls are preserved", () => {
+		const result = buildDockerContainerOptions(
+			{
+				...dockerConfig,
+				capDrop: ["NET_RAW"],
+				securityOpt: ["seccomp=profile.json"],
+				readonlyRootfs: false,
+			},
+			process.cwd(),
+		);
+
+		expect(result.ok).toBe(true);
+		if (!result.ok) return;
+		expect(result.value.HostConfig).toMatchObject({
+			CapDrop: ["NET_RAW"],
+			SecurityOpt: ["seccomp=profile.json"],
+			ReadonlyRootfs: false,
+		});
+	});
 });
 
 const dockerConfig: DockerBackendConfig = {

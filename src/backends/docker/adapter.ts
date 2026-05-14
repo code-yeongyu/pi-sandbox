@@ -87,11 +87,11 @@ class DockerSandboxBackend implements SandboxBackend {
 			await container.start();
 			const waitResult: unknown = await container.wait();
 			settled = true;
-			if (timedOut) return { ok: true, value: { exitCode: 124 } };
+			if (timedOut) return { ok: false, error: timeoutFailure(timeoutMs) };
 			if (abortRequested) return { ok: true, value: { exitCode: 130 } };
 			return { ok: true, value: { exitCode: statusCodeFromWait(waitResult) } };
 		} catch (cause) {
-			if (timedOut) return { ok: true, value: { exitCode: 124 } };
+			if (timedOut) return { ok: false, error: timeoutFailure(timeoutMs) };
 			if (abortRequested || options.signal?.aborted) return { ok: true, value: { exitCode: 130 } };
 			return { ok: false, error: dockerFailure("bash.exec", "container", errorMessage(cause)) };
 		} finally {
@@ -354,5 +354,21 @@ function dockerFailure(operation: string, target: string, message: string): Sand
 		policyRevision: 0,
 		remediation: "Check Docker daemon availability and container image compatibility.",
 		backendMessage: message,
+	});
+}
+
+function timeoutFailure(timeoutMs: number): SandboxFailure {
+	return createBlock({
+		version: 1,
+		code: "timeout",
+		policyArea: "backend",
+		operation: "bash.exec",
+		sanitizedTarget: "container",
+		matchedRule: "execution.timeout",
+		backend: "docker",
+		policyHash: "uninitialized",
+		policyRevision: 0,
+		remediation: "Increase the command timeout or run a shorter command.",
+		timeoutMs,
 	});
 }

@@ -35,9 +35,9 @@ export function buildDockerContainerOptions(
 		WorkingDir: overrides.workingDir ?? WORKSPACE_PATH,
 		HostConfig: {
 			Privileged: false,
-			CapDrop: ["ALL"],
-			SecurityOpt: ["no-new-privileges"],
-			ReadonlyRootfs: true,
+			CapDrop: [...config.capDrop],
+			SecurityOpt: [...config.securityOpt],
+			ReadonlyRootfs: config.readonlyRootfs,
 			Tmpfs: buildTmpfs(config.tmpfs),
 			NetworkMode: config.networkMode,
 			AutoRemove: true,

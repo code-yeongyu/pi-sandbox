@@ -1,16 +1,8 @@
 import { createHash } from "node:crypto";
 import { isAbsolute, normalize, resolve, sep } from "node:path";
+import type { SandboxOperation } from "../sandbox/operation.js";
 import { createBlock, type SandboxBlockV1 } from "../security/failure.js";
 import type { EffectivePolicy } from "./effective.js";
-
-export type SandboxOperation =
-	| { readonly kind: "bash"; readonly command: string; readonly cwd: string }
-	| { readonly kind: "fs.read"; readonly path: string }
-	| { readonly kind: "fs.write"; readonly path: string; readonly content: string | Buffer }
-	| { readonly kind: "fs.access"; readonly path: string }
-	| { readonly kind: "fs.mkdir"; readonly path: string }
-	| { readonly kind: "process.spawn"; readonly binary: string; readonly args: readonly string[]; readonly cwd: string }
-	| { readonly kind: "network"; readonly method: string; readonly url: string };
 
 export type DecisionRequest = {
 	readonly operation: SandboxOperation;

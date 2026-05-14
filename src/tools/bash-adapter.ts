@@ -2,8 +2,8 @@
 
 import { toBashBlockedOutput } from "../explain/render-bash-output.js";
 import type { BashOperations } from "../pi/index.js";
-import type { SandboxOperation } from "../policy/decision.js";
 import type { SandboxManager } from "../sandbox/manager.js";
+import type { SandboxOperation } from "../sandbox/operation.js";
 import { filterExplicitEnv } from "../security/env-policy.js";
 import { createBlock } from "../security/failure.js";
 import { wrapWithRedactor } from "../security/redactor.js";

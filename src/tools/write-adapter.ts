@@ -1,8 +1,8 @@
 import { toToolResultBlock } from "../explain/render-tool-result.js";
 import type { WriteOperations } from "../pi/index.js";
-import type { SandboxOperation } from "../policy/decision.js";
 import type { SandboxBackend } from "../sandbox/backend.js";
 import type { SandboxManager } from "../sandbox/manager.js";
+import type { SandboxOperation } from "../sandbox/operation.js";
 import { createBlock, type Result, type SandboxBlockV1, type SandboxFailure } from "../security/failure.js";
 
 export function toWriteOperations(manager: SandboxManager): WriteOperations {

@@ -123,6 +123,7 @@ describe("backend module no-live-infra behavior", () => {
 		const connectConfig = buildConnectConfig(sshConfig);
 		const key = Buffer.from("host-key", "utf8");
 		const verifier = buildHostVerifier({ strict: true, hostHash: `SHA256:${sha256Fingerprint(key)}` });
+		const nonStrictVerifier = buildHostVerifier({ strict: false });
 
 		expect(connectConfig.ok).toBe(true);
 		if (!connectConfig.ok) throw new Error(connectConfig.error.remediation);
@@ -130,6 +131,7 @@ describe("backend module no-live-infra behavior", () => {
 		expect(connectConfig.value.password).toBe("secret");
 		expect(verifier(key)).toBe(true);
 		expect(verifier(Buffer.from("other-key", "utf8"))).toBe(false);
+		expect(nonStrictVerifier(key)).toBe(false);
 	});
 
 	it("#given justbash root-locked backend #when symlink escapes are read or written #then realpath guard denies them", async () => {
@@ -148,6 +150,51 @@ describe("backend module no-live-infra behavior", () => {
 		if (readResult?.ok === false) expect(readResult.error.code).toBe("permission_denied");
 		expect(writeResult?.ok).toBe(false);
 		if (writeResult?.ok === false) expect(writeResult.error.code).toBe("permission_denied");
+	});
+
+	it("#given justbash command references blocked host path #when exec denies #then actual path is reported", async () => {
+		const projectRoot = await makeTemporaryRoot("pi-sandbox-justbash-deny-path-");
+		const backend = await createJustbashBackend(justbashRootLockedConfig, projectRoot, envPolicy);
+
+		expect(backend.ok).toBe(true);
+		if (!backend.ok) throw new Error(backend.error.remediation);
+		const result = await backend.value.bash?.exec("cat /private/secret-token", { cwd: projectRoot });
+
+		expect(result?.ok).toBe(false);
+		if (result?.ok === false) expect(result.error.sanitizedTarget).toBe("/private/secret-token");
+	});
+
+	it("#given justbash command exceeds timeout #when exec returns #then timeout is a failure result", async () => {
+		const projectRoot = await makeTemporaryRoot("pi-sandbox-justbash-timeout-");
+		const backend = await createJustbashBackend(justbashRootLockedConfig, projectRoot, envPolicy);
+
+		expect(backend.ok).toBe(true);
+		if (!backend.ok) throw new Error(backend.error.remediation);
+		const result = await backend.value.bash?.exec("sleep 1", { cwd: projectRoot, timeoutMs: 1 });
+
+		expect(result?.ok).toBe(false);
+		if (result?.ok === false) expect(result.error.code).toBe("timeout");
+	});
+
+	it("#given justbash backend #when real controls are probed #then probe results are returned", async () => {
+		const projectRoot = await makeTemporaryRoot("pi-sandbox-justbash-probe-");
+		const backend = await createJustbashBackend(justbashRootLockedConfig, projectRoot, envPolicy);
+
+		expect(backend.ok).toBe(true);
+		if (!backend.ok) throw new Error(backend.error.remediation);
+		const probes = await backend.value.lifecycle.probe(["pathMapping", "networkAllowlist"]);
+
+		expect(probes).toEqual([
+			{ kind: "passed", evidence: "justbash maps host paths into its virtual filesystem", control: "pathMapping" },
+			{
+				kind: "failed",
+				command: "probe-unsupported-control",
+				exitCode: null,
+				reason: "justbash does not enforce this control",
+				fixHint: "Use a backend that supports the requested control.",
+				control: "networkAllowlist",
+			},
+		]);
 	});
 
 	it("#given justbash restricted network with non-url-prefix controls #when network config is converted #then capability gap is explicit", () => {

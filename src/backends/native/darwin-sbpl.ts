@@ -17,9 +17,10 @@ export function generateSbplProfile(policy: DarwinSbplPolicy): string {
 		"(allow file-read-metadata)",
 	];
 
-	for (const root of dedupe([policy.cwd, ...policy.file.roots.map((entry) => entry.path)])) {
+	const rootsByPath = new Map(policy.file.roots.map((entry) => [entry.path, entry]));
+	for (const root of dedupe([policy.cwd, ...rootsByPath.keys()])) {
 		const escapedRoot = sbplString(root);
-		const matchingRoot = policy.file.roots.find((entry) => entry.path === root);
+		const matchingRoot = rootsByPath.get(root);
 		const canRead = root === policy.cwd || policy.file.defaultRead === "allow" || matchingRoot?.read === true;
 		const canWrite = policy.file.defaultWrite === "allow" || matchingRoot?.write === true;
 		if (canRead) lines.push(`(allow file-read* (subpath ${escapedRoot}))`);

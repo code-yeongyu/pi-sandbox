@@ -14,7 +14,7 @@ import path from "node:path";
 
 import { Bash, type Command, type NetworkConfig, ReadWriteFs } from "just-bash";
 
-import type { BackendCapability } from "../../policy/capability.js";
+import type { BackendCapability, SandboxControl } from "../../policy/capability.js";
 import type { EnvPolicy, JustbashBackendConfig } from "../../policy/desired.js";
 import type { HealthResult, ProbeResult } from "../../policy/effective.js";
 import type { SandboxBackend, SandboxExecOptions } from "../../sandbox/backend.js";
@@ -99,10 +99,11 @@ class JustbashSandboxBackend implements SandboxBackend {
 		command: string,
 		options: SandboxExecOptions,
 	): Promise<Result<{ readonly exitCode: number | null }, SandboxFailure>> {
-		if (extractAbsolutePaths(command).some((target) => !this.pathMapper.canRepresent(target))) {
+		const deniedPath = extractAbsolutePaths(command).find((target) => !this.pathMapper.canRepresent(target));
+		if (deniedPath !== undefined) {
 			return {
 				ok: false,
-				error: backendFailure("permission_denied", "file.read", "bash", "/etc/passwd", "file.roots.read=missing"),
+				error: backendFailure("permission_denied", "file.read", "bash", deniedPath, "file.roots.read=missing"),
 			};
 		}
 		const mappedCwd = this.pathMapper.hostToSandboxPath(options.cwd);
@@ -137,11 +138,11 @@ class JustbashSandboxBackend implements SandboxBackend {
 			const result = await bash.exec(command, { signal: controller.signal });
 			if (result.stdout.length > 0) options.onData?.(Buffer.from(result.stdout, "utf8"));
 			if (result.stderr.length > 0) options.onData?.(Buffer.from(result.stderr, "utf8"));
-			if (timedOut) return { ok: true, value: { exitCode: 124 } };
+			if (timedOut) return { ok: false, error: timeoutFailure(timeoutMs) };
 			if (controller.signal.aborted) return { ok: true, value: { exitCode: 130 } };
 			return { ok: true, value: { exitCode: result.exitCode } };
 		} catch (cause) {
-			if (timedOut) return { ok: true, value: { exitCode: 124 } };
+			if (timedOut) return { ok: false, error: timeoutFailure(timeoutMs) };
 			if (controller.signal.aborted) return { ok: true, value: { exitCode: 130 } };
 			const message = cause instanceof Error ? cause.message : String(cause);
 			return { ok: false, error: backendError(message) };
@@ -287,9 +288,26 @@ class JustbashLifecycle {
 		return { healthy: true, backend: "justbash", latencyMs: 0, details: "justbash ready" };
 	}
 
-	public async probe(controls: readonly []): Promise<readonly ProbeResult[]> {
-		return controls;
+	public async probe(controls: readonly SandboxControl[]): Promise<readonly ProbeResult[]> {
+		return controls.map((control) => {
+			if (justbashCapability[control] !== false) {
+				return { kind: "passed", evidence: evidenceForControl(control), control };
+			}
+			return {
+				kind: "failed",
+				command: "probe-unsupported-control",
+				exitCode: null,
+				reason: "justbash does not enforce this control",
+				fixHint: "Use a backend that supports the requested control.",
+				control,
+			};
+		});
 	}
+}
+
+function evidenceForControl(control: SandboxControl): string {
+	if (control === "pathMapping") return "justbash maps host paths into its virtual filesystem";
+	return `justbash capability ${control} is available`;
 }
 
 class JustbashPathMapper implements PathMapper {
@@ -378,6 +396,22 @@ function backendError(message: string): SandboxFailure {
 		policyRevision: 0,
 		remediation: "Inspect the justbash backend error and retry with a supported shell command.",
 		backendMessage: message,
+	});
+}
+
+function timeoutFailure(timeoutMs: number): SandboxFailure {
+	return createBlock({
+		version: 1,
+		code: "timeout",
+		policyArea: "backend",
+		operation: "bash.exec",
+		sanitizedTarget: "justbash",
+		matchedRule: "execution.timeout",
+		backend: "justbash",
+		policyHash: "uninitialized",
+		policyRevision: 0,
+		remediation: "Increase the command timeout or run a shorter command.",
+		timeoutMs,
 	});
 }
 

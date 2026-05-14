@@ -5,11 +5,11 @@ import {
 	type BackendCapability,
 	BackendCapabilitySchema,
 	type NonEmptyArray,
+	type SandboxControl,
 	SandboxControlSchema,
 } from "../policy/capability.js";
 import { type BackendKind, BackendKindSchema } from "../policy/desired.js";
 import { type ProbeResult, ProbeResultSchema } from "../policy/effective.js";
-import type { SandboxControl } from "../security/failure.js";
 
 export const BackendAvailabilitySchema = z.discriminatedUnion("status", [
 	z

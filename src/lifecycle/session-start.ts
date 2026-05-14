@@ -151,9 +151,6 @@ export function backendStateForConfig(
 			diagnostics: [],
 		};
 	}
-	if (config.platform === "linux") {
-		return availableBackendState("native", linuxBwrapCapability);
-	}
 	return availableBackendState("native", linuxBwrapCapability);
 }
 
@@ -372,9 +369,8 @@ function effectiveControlsForCapability(capabilities: BackendCapability): Effect
 }
 
 function omittedControlsForCapability(capabilities: BackendCapability): readonly SandboxControl[] {
-	return sandboxControls.filter(
-		(control) => effectiveControlsForCapability(capabilities)[control].state === "omitted",
-	);
+	const effectiveControls = effectiveControlsForCapability(capabilities);
+	return sandboxControls.filter((control) => effectiveControls[control].state === "omitted");
 }
 
 function configMismatch(actual: string, expected: string): SandboxFailure {

@@ -115,13 +115,15 @@ export async function loadGrantsFile(
 export async function loadFullConfig(
 	cwd: string,
 ): Promise<Result<{ merged: SandboxRawConfig; grants: ReadonlyArray<ApprovalDecision> }, LoadError>> {
-	const globalConfig = await loadGlobalConfig();
+	const [globalConfig, projectConfig, globalGrants, projectGrants] = await Promise.all([
+		loadGlobalConfig(),
+		loadProjectConfig(cwd),
+		loadGrantsFile(cwd, "global"),
+		loadGrantsFile(cwd, "project"),
+	]);
 	if (!globalConfig.ok) return globalConfig;
-	const projectConfig = await loadProjectConfig(cwd);
 	if (!projectConfig.ok) return projectConfig;
-	const globalGrants = await loadGrantsFile(cwd, "global");
 	if (!globalGrants.ok) return globalGrants;
-	const projectGrants = await loadGrantsFile(cwd, "project");
 	if (!projectGrants.ok) return projectGrants;
 	return {
 		ok: true,

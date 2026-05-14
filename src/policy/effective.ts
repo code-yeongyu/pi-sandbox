@@ -1,7 +1,11 @@
 // src/policy/effective.ts — EffectivePolicy + EffectiveBackendState types
 import { z } from "zod";
-import type { SandboxControl } from "../security/failure.js";
-import { type BackendCapability, BackendCapabilitySchema, SandboxControlSchema } from "./capability.js";
+import {
+	type BackendCapability,
+	BackendCapabilitySchema,
+	type SandboxControl,
+	SandboxControlSchema,
+} from "./capability.js";
 import {
 	type BackendKind,
 	BackendKindSchema,

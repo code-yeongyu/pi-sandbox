@@ -1,10 +1,12 @@
+import { isAbsolute, relative } from "node:path";
+
 import type { PromptHandler } from "../approvals/prompt.js";
 import { parseTypedGrantRequestId, type TypedGrant } from "../approvals/store.js";
 import { computeGrantHash, nextRevision } from "../config/hash.js";
 import { loadFullConfig } from "../config/load.js";
 import { normalizeConfig } from "../config/normalize.js";
 import type { ApprovalDecision } from "../config/schema.js";
-import { type Decision, decide, type SandboxOperation } from "../policy/decision.js";
+import { type Decision, decide } from "../policy/decision.js";
 import type { DesiredBackendConfig } from "../policy/desired.js";
 import type { EffectivePolicy } from "../policy/effective.js";
 import { createBlock, type Result, type SandboxFailure } from "../security/failure.js";
@@ -13,6 +15,7 @@ import { createStreamingRedactor } from "../security/redactor.js";
 import type { SandboxBackend } from "./backend.js";
 import type { BackendRegistry } from "./backend-registry.js";
 import type { SandboxMode } from "./mode.js";
+import type { SandboxOperation } from "./operation.js";
 
 export class SandboxManager {
 	readonly #registry: BackendRegistry;
@@ -315,12 +318,20 @@ function policyAreaForGrantClass(grantClass: TypedGrant["class"]): "file.read" |
 }
 
 function typedGrantMatches(grant: TypedGrant, operation: SandboxOperation): boolean {
-	if (grant.class === "file.read") return isFileReadOperation(operation) && operation.path.startsWith(grant.target);
-	if (grant.class === "file.write") return isFileWriteOperation(operation) && operation.path.startsWith(grant.target);
+	const urls = urlsForOperation(operation);
+	if (grant.class === "file.read")
+		return isFileReadOperation(operation) && pathMatchesGrant(grant.target, operation.path);
+	if (grant.class === "file.write")
+		return isFileWriteOperation(operation) && pathMatchesGrant(grant.target, operation.path);
 	if (grant.class === "binary") return binaryForOperation(operation) === grant.target;
-	if (grant.class === "domain") return urlsForOperation(operation).some((url) => hostForUrl(url) === grant.target);
-	if (grant.class === "url-prefix") return urlsForOperation(operation).some((url) => url.startsWith(grant.target));
-	return urlsForOperation(operation).some((url) => portForUrl(url) === Number(grant.target));
+	if (grant.class === "domain") return urls.some((url) => hostForUrl(url) === grant.target);
+	if (grant.class === "url-prefix") return urls.some((url) => url.startsWith(grant.target));
+	return urls.some((url) => portForUrl(url) === Number(grant.target));
+}
+
+function pathMatchesGrant(grantTarget: string, operationPath: string): boolean {
+	const relativePath = relative(grantTarget, operationPath);
+	return relativePath === "" || (!relativePath.startsWith("..") && !isAbsolute(relativePath));
 }
 
 function isFileReadOperation(

@@ -8,7 +8,7 @@ import type { Result } from "./failure.js";
 export type CanonicalizationResult = {
 	readonly canonical: string;
 	readonly followedSymlinks: boolean;
-	readonly residualToctoeRisk: boolean;
+	readonly residualToctouRisk: boolean;
 };
 
 export async function canonicalizePath(
@@ -22,7 +22,7 @@ export async function canonicalizePath(
 
 async function canonicalizeFollowingSymlinks(path: string): Promise<Result<CanonicalizationResult, PathMappingError>> {
 	try {
-		return { ok: true, value: { canonical: await realpath(path), followedSymlinks: true, residualToctoeRisk: true } };
+		return { ok: true, value: { canonical: await realpath(path), followedSymlinks: true, residualToctouRisk: true } };
 	} catch {
 		return { ok: false, error: { kind: "non-representable", hostPath: path, reason: "realpath-failed" } };
 	}
@@ -51,5 +51,5 @@ async function canonicalizeWithoutFollowingSymlinks(
 			error: { kind: "non-representable", hostPath: path, reason: `symlink-not-allowed:${resolvedTarget}` },
 		};
 	}
-	return { ok: true, value: { canonical: await realpath(path), followedSymlinks: false, residualToctoeRisk: true } };
+	return { ok: true, value: { canonical: await realpath(path), followedSymlinks: false, residualToctouRisk: true } };
 }

@@ -12,7 +12,6 @@ export function buildHostVerifier(verification: SshHostVerificationConfig): (key
 	}
 
 	return (key: Buffer): boolean => {
-		if (!verification.strict) return true;
 		if (acceptedFingerprints.size === 0) return false;
 		return acceptedFingerprints.has(sha256Fingerprint(key));
 	};

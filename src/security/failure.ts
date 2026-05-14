@@ -1,19 +1,7 @@
 // src/security/failure.ts — SandboxBlockSchema + SandboxFailure union (Zod)
 import { z } from "zod";
 
-export const SandboxControlSchema = z.enum([
-	"fileRead",
-	"fileWrite",
-	"fsPathResolution",
-	"networkDeny",
-	"networkAllowlist",
-	"processIsolation",
-	"envScrub",
-	"stdoutCapture",
-	"pathMapping",
-	"persistence",
-	"denialAttribution",
-]);
+import { SandboxControlSchema } from "../policy/capability.js";
 
 export const SandboxBlockCodeSchema = z.enum([
 	"permission_denied",
@@ -133,7 +121,6 @@ export const SandboxBlockV1Schema = z.discriminatedUnion("code", [
 
 export const SandboxFailureSchema = SandboxBlockV1Schema;
 
-export type SandboxControl = z.infer<typeof SandboxControlSchema>;
 export type SandboxBlockCode = z.infer<typeof SandboxBlockCodeSchema>;
 export type PolicyArea = z.infer<typeof PolicyAreaSchema>;
 export type BaseBlock = z.infer<typeof BaseBlockSchema>;

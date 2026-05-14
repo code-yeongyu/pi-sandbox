@@ -1,8 +1,19 @@
 // src/policy/capability.ts — BackendCapability + SandboxControl types
 import { z } from "zod";
 
-export type { SandboxControl } from "../security/failure.js";
-export { SandboxControlSchema } from "../security/failure.js";
+export const SandboxControlSchema = z.enum([
+	"fileRead",
+	"fileWrite",
+	"fsPathResolution",
+	"networkDeny",
+	"networkAllowlist",
+	"processIsolation",
+	"envScrub",
+	"stdoutCapture",
+	"pathMapping",
+	"persistence",
+	"denialAttribution",
+]);
 
 export const FsPathResolutionSchema = z.enum([
 	"kernel-openat2",
@@ -30,5 +41,6 @@ export const BackendCapabilitySchema = z
 	.readonly();
 
 export type FsPathResolution = z.infer<typeof FsPathResolutionSchema>;
+export type SandboxControl = z.infer<typeof SandboxControlSchema>;
 export type BackendCapability = z.infer<typeof BackendCapabilitySchema>;
 export type NonEmptyArray<TValue> = readonly [TValue, ...TValue[]];

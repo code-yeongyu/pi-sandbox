@@ -100,7 +100,4 @@ export default function piSandboxExtension(pi: ExtensionAPI): void {
 		if (manager === null) return undefined;
 		return { operations: toBashOperations(manager) };
 	});
-
-	pi.on("tool_call", async () => undefined);
-	pi.on("tool_result", async () => undefined);
 }

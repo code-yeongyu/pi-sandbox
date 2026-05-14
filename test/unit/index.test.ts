@@ -50,14 +50,6 @@ describe("pi sandbox extension factory", () => {
 			default: false,
 			description: "Disable pi-sandbox enforcement",
 		});
-		expect(events).toEqual([
-			"session_start",
-			"session_shutdown",
-			"session_start",
-			"before_agent_start",
-			"user_bash",
-			"tool_call",
-			"tool_result",
-		]);
+		expect(events).toEqual(["session_start", "session_shutdown", "session_start", "before_agent_start", "user_bash"]);
 	});
 });
