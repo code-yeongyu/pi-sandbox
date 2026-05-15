@@ -59,7 +59,7 @@
 		"zod": "latest"
 	},
 	"devDependencies": {
-		"@biomejs/biome": "2.4.14",
+		"@biomejs/biome": "2.4.15",
 		"@types/dockerode": "latest",
 		"@types/node": "latest",
 		"@types/ssh2": "latest",
