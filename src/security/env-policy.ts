@@ -38,10 +38,10 @@ export function buildEnv(policy: EnvPolicy, parentEnv: NodeJS.ProcessEnv): Reado
 		for (const key of PROXY_KEYS) entries.delete(key);
 	}
 
-	entries.set("PATH", parentEnv.PATH ?? sandboxPath());
+	entries.set("PATH", parentEnv["PATH"] ?? sandboxPath());
 	entries.set("HOME", join(process.cwd(), ".pi", "sandbox-home"));
-	entries.set("TERM", parentEnv.TERM ?? "dumb");
-	entries.set("LANG", parentEnv.LANG ?? "C.UTF-8");
+	entries.set("TERM", parentEnv["TERM"] ?? "dumb");
+	entries.set("LANG", parentEnv["LANG"] ?? "C.UTF-8");
 
 	return Object.freeze(entries);
 }
@@ -59,10 +59,10 @@ export function filterExplicitEnv(
 		entries.set(name, value);
 	}
 
-	entries.set("PATH", defaultEnv.PATH ?? sandboxPath());
+	entries.set("PATH", defaultEnv["PATH"] ?? sandboxPath());
 	entries.set("HOME", join(process.cwd(), ".pi", "sandbox-home"));
-	entries.set("TERM", defaultEnv.TERM ?? "dumb");
-	entries.set("LANG", defaultEnv.LANG ?? "C.UTF-8");
+	entries.set("TERM", defaultEnv["TERM"] ?? "dumb");
+	entries.set("LANG", defaultEnv["LANG"] ?? "C.UTF-8");
 
 	return Object.freeze(entries);
 }

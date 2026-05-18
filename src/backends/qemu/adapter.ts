@@ -384,9 +384,9 @@ async function qemuVersion(): Promise<Result<string, SandboxFailure>> {
 
 function minimalHostEnv(): NodeJS.ProcessEnv {
 	return {
-		PATH: process.env.PATH ?? "/usr/bin:/bin:/usr/sbin:/sbin",
-		HOME: process.env.HOME ?? "/tmp",
-		TERM: process.env.TERM ?? "dumb",
+		PATH: process.env["PATH"] ?? "/usr/bin:/bin:/usr/sbin:/sbin",
+		HOME: process.env["HOME"] ?? "/tmp",
+		TERM: process.env["TERM"] ?? "dumb",
 	};
 }
 
@@ -395,8 +395,9 @@ function guestExitCode(output: string, marker: string): number | null {
 	if (markerIndex < 0) return null;
 	const rest = output.slice(markerIndex + marker.length);
 	const match = /^(?<code>\d+)/.exec(rest.trimStart());
-	if (match?.groups?.code === undefined) return null;
-	return Number.parseInt(match.groups.code, 10);
+	const code = match?.groups?.["code"];
+	if (code === undefined) return null;
+	return Number.parseInt(code, 10);
 }
 
 function killProcessGroup(child: ChildProcessWithoutNullStreams): void {

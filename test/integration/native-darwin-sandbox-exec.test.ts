@@ -46,10 +46,11 @@ describeIfSandboxExec("native darwin sandbox-exec backend", () => {
 
 	it("#given file write policy denying $HOME #when sandbox writes to $HOME/escape #then it fails", async () => {
 		const sessionRoot = await makeSessionRoot();
-		const target = path.join(process.env.HOME ?? tmpdir(), "escape");
+		const home = process.env["HOME"] ?? tmpdir();
+		const target = path.join(home, "escape");
 		const profile = generateSbplProfile({
 			network: { mode: "deny" },
-			file: filePolicy({ root: sessionRoot, write: true, denyPaths: [process.env.HOME ?? tmpdir()] }),
+			file: filePolicy({ root: sessionRoot, write: true, denyPaths: [home] }),
 			cwd: sessionRoot,
 			allowedExecutables: ["/bin/sh", "/bin/bash"],
 		});
@@ -162,10 +163,10 @@ function runSandboxExec(args: readonly string[], cwd: string): Promise<RunResult
 
 function minimalEnvironment(): NodeJS.ProcessEnv {
 	return {
-		PATH: process.env.PATH ?? "/usr/bin:/bin:/usr/sbin:/sbin",
-		HOME: process.env.HOME ?? tmpdir(),
-		TERM: process.env.TERM ?? "dumb",
-		LANG: process.env.LANG ?? "C.UTF-8",
+		PATH: process.env["PATH"] ?? "/usr/bin:/bin:/usr/sbin:/sbin",
+		HOME: process.env["HOME"] ?? tmpdir(),
+		TERM: process.env["TERM"] ?? "dumb",
+		LANG: process.env["LANG"] ?? "C.UTF-8",
 	};
 }
 

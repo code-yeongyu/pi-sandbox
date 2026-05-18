@@ -153,43 +153,42 @@ class JustbashSandboxBackend implements SandboxBackend {
 	}
 
 	public async readFile(absolutePath: string): Promise<Result<Buffer, SandboxFailure>> {
-		const mappedPath = await this.realPathForRead(absolutePath, "read.readFile");
-		if (!mappedPath.ok) return mappedPath;
-		try {
-			return { ok: true, value: await readHostFile(mappedPath.value) };
-		} catch (cause) {
-			return { ok: false, error: backendError(errorMessage(cause)) };
-		}
+		return this.withMappedPath(absolutePath, "read.readFile", "read", async (mappedPath) =>
+			readHostFile(mappedPath, { encoding: null }),
+		);
 	}
 
 	public async access(absolutePath: string): Promise<Result<void, SandboxFailure>> {
-		const mappedPath = await this.realPathForRead(absolutePath, "read.access");
-		if (!mappedPath.ok) return mappedPath;
-		try {
-			await accessHostPath(mappedPath.value);
-			return { ok: true, value: undefined };
-		} catch (cause) {
-			return { ok: false, error: backendError(errorMessage(cause)) };
-		}
+		return this.withMappedPath(absolutePath, "read.access", "read", async (mappedPath) => {
+			await accessHostPath(mappedPath);
+		});
 	}
 
 	public async writeFile(absolutePath: string, content: string | Buffer): Promise<Result<void, SandboxFailure>> {
-		const mappedPath = await this.realPathForWrite(absolutePath, "write.writeFile");
-		if (!mappedPath.ok) return mappedPath;
-		try {
-			await writeHostFile(mappedPath.value, content);
-			return { ok: true, value: undefined };
-		} catch (cause) {
-			return { ok: false, error: backendError(errorMessage(cause)) };
-		}
+		return this.withMappedPath(absolutePath, "write.writeFile", "write", async (mappedPath) => {
+			await writeHostFile(mappedPath, content);
+		});
 	}
 
 	public async mkdir(absolutePath: string): Promise<Result<void, SandboxFailure>> {
-		const mappedPath = await this.realPathForWrite(absolutePath, "write.mkdir");
+		return this.withMappedPath(absolutePath, "write.mkdir", "write", async (mappedPath) => {
+			await mkdir(mappedPath, { recursive: true });
+		});
+	}
+
+	private async withMappedPath<TValue>(
+		absolutePath: string,
+		operation: string,
+		accessMode: "read" | "write",
+		action: (mappedPath: string) => Promise<TValue>,
+	): Promise<Result<TValue, SandboxFailure>> {
+		const mappedPath =
+			accessMode === "read"
+				? await this.realPathForRead(absolutePath, operation)
+				: await this.realPathForWrite(absolutePath, operation);
 		if (!mappedPath.ok) return mappedPath;
 		try {
-			await mkdir(mappedPath.value, { recursive: true });
-			return { ok: true, value: undefined };
+			return { ok: true, value: await action(mappedPath.value) };
 		} catch (cause) {
 			return { ok: false, error: backendError(errorMessage(cause)) };
 		}

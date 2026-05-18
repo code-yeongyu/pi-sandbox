@@ -344,7 +344,7 @@ function stableOperationString(operation: SandboxOperation): string {
 }
 
 function sanitizePath(path: string): string {
-	const home = process.env.HOME;
+	const home = process.env["HOME"];
 	if (home !== undefined && path === home) return "~";
 	if (home !== undefined && path.startsWith(`${home}${sep}`)) return `~${path.slice(home.length)}`;
 	return path;

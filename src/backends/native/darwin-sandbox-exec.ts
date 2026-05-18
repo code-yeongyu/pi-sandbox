@@ -357,7 +357,11 @@ function execFilePolicy(sessionRoot: string, cwd: string): FilePolicy {
 			rootPolicy(sessionRoot, true),
 			...(path.resolve(cwd) === path.resolve(sessionRoot) ? [] : [rootPolicy(cwd, true)]),
 		],
-		denySpecialPaths: [path.join(process.env.HOME ?? "/var/empty", ".ssh"), "/private/var/db", "/Library/Keychains"],
+		denySpecialPaths: [
+			path.join(process.env["HOME"] ?? "/var/empty", ".ssh"),
+			"/private/var/db",
+			"/Library/Keychains",
+		],
 		denyMagicLinks: true,
 		highRiskWriteClasses: ["dotenv", "ssh-key", "git-hook", "shell-rc", "npm-script", "executable"],
 		maxReadBytes: 1024 * 1024,
@@ -378,10 +382,10 @@ function rootPolicy(rootPath: string, write: boolean): FilePolicy["roots"][numbe
 
 function defaultEnvironment(): ReadonlyMap<string, string> {
 	return new Map([
-		["PATH", process.env.PATH ?? "/usr/bin:/bin:/usr/sbin:/sbin"],
+		["PATH", process.env["PATH"] ?? "/usr/bin:/bin:/usr/sbin:/sbin"],
 		["HOME", path.join(process.cwd(), ".pi", "sandbox-home")],
-		["TERM", process.env.TERM ?? "dumb"],
-		["LANG", process.env.LANG ?? "C.UTF-8"],
+		["TERM", process.env["TERM"] ?? "dumb"],
+		["LANG", process.env["LANG"] ?? "C.UTF-8"],
 	]);
 }
 

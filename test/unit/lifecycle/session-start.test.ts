@@ -26,15 +26,15 @@ let testProject: string;
 let originalHome: string | undefined;
 
 beforeEach(async () => {
-	originalHome = process.env.HOME;
+	originalHome = process.env["HOME"];
 	testHome = await mkdtemp(join(tmpdir(), "pi-sandbox-session-home-"));
 	testProject = await mkdtemp(join(tmpdir(), "pi-sandbox-session-project-"));
-	process.env.HOME = testHome;
+	process.env["HOME"] = testHome;
 });
 
 afterEach(async () => {
-	if (originalHome === undefined) delete process.env.HOME;
-	else process.env.HOME = originalHome;
+	if (originalHome === undefined) delete process.env["HOME"];
+	else process.env["HOME"] = originalHome;
 	await rm(testHome, { recursive: true, force: true });
 	await rm(testProject, { recursive: true, force: true });
 });

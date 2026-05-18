@@ -130,7 +130,7 @@ async function readManifest(manifestPath: string): Promise<Result<ReadonlyMap<st
 					),
 				};
 			}
-			entries.set(path.basename(match.groups.file ?? ""), (match.groups.hash ?? "").toLowerCase());
+			entries.set(path.basename(match.groups["file"] ?? ""), (match.groups["hash"] ?? "").toLowerCase());
 		}
 		return { ok: true, value: entries };
 	} catch (cause) {

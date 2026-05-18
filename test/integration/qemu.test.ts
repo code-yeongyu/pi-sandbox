@@ -10,7 +10,7 @@ import { verifyFixture } from "../../src/backends/qemu/smoke-fixture.js";
 import type { QemuBackendConfig } from "../../src/policy/desired.js";
 import type { SandboxBackend } from "../../src/sandbox/backend.js";
 
-const qemuSmokeEnabled = process.env.PI_SANDBOX_QEMU_SMOKE === "1";
+const qemuSmokeEnabled = process.env["PI_SANDBOX_QEMU_SMOKE"] === "1";
 const qemuDoctor = await runQemuDoctor();
 const fixture = await verifyFixture();
 const qemuAvailable = qemuSmokeEnabled && qemuDoctor.binaryPath !== null && fixture.ok;

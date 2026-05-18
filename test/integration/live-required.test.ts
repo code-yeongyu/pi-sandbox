@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 import { createJustbashBackend } from "../../src/backends/justbash/adapter.js";
 import type { EnvPolicy, JustbashBackendConfig } from "../../src/policy/desired.js";
 
-const requireLive = process.env.PI_SANDBOX_REQUIRE_LIVE === "1";
+const requireLive = process.env["PI_SANDBOX_REQUIRE_LIVE"] === "1";
 const describeLive = requireLive ? describe : describe.skip;
 
 describeLive("required live backend smoke", () => {

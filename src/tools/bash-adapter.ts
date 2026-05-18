@@ -14,6 +14,7 @@ export function toBashOperations(manager: SandboxManager): BashOperations {
 			const operation: SandboxOperation = { kind: "bash", command, cwd };
 			const wrappedOnData = wrapWithRedactor(options.onData, manager.getRedactor());
 			const result = await manager.run(operation, async (backend) => {
+				const effectivePolicy = manager.getEffectivePolicy();
 				if (backend.bash === undefined) {
 					return {
 						ok: false,
@@ -24,15 +25,15 @@ export function toBashOperations(manager: SandboxManager): BashOperations {
 							operation: "bash.exec",
 							sanitizedTarget: "bash",
 							matchedRule: "backend.bash=missing",
-							backend: manager.getEffectivePolicy().backend.kind,
-							policyHash: manager.getEffectivePolicy().desiredPolicyHash,
-							policyRevision: manager.getEffectivePolicy().policyRevision,
+							backend: effectivePolicy.backend.kind,
+							policyHash: effectivePolicy.desiredPolicyHash,
+							policyRevision: effectivePolicy.policyRevision,
 							remediation: "Switch to a backend that provides bash execution.",
 							control: "processIsolation",
 						}),
 					};
 				}
-				const environment = envMap(options.env, manager.getEffectivePolicy().env);
+				const environment = envMap(options.env, effectivePolicy.env);
 				const execOptions = {
 					cwd,
 					...(options.signal === undefined ? {} : { signal: options.signal }),

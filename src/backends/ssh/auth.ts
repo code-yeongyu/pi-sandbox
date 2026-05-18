@@ -35,7 +35,7 @@ export function buildConnectConfig(backendConfig: SshBackendConfig): Result<Conn
 			case "password":
 				return { ok: true, value: { ...base, password: backendConfig.auth.password } };
 			case "agent": {
-				const agent = backendConfig.auth.sock ?? process.env.SSH_AUTH_SOCK;
+				const agent = backendConfig.auth.sock ?? process.env["SSH_AUTH_SOCK"];
 				if (agent === undefined || agent.length === 0) {
 					return {
 						ok: false,
