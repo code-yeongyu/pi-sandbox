@@ -4,10 +4,11 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockedTmpdir = vi.hoisted(() => ({ value: "" }));
-const testParent = "/var/folders/nj/hqfr8ndn5q56cqw7jqgbrck40000gn/T/opencode";
+const realTmpdir = vi.hoisted(() => ({ value: "" }));
 
 vi.mock("node:os", async (importOriginal) => {
 	const actual = await importOriginal<typeof import("node:os")>();
+	realTmpdir.value = actual.tmpdir();
 	return {
 		...actual,
 		tmpdir: () => mockedTmpdir.value,
@@ -19,7 +20,7 @@ import { reapOrphans } from "../../../src/lifecycle/orphan-reaper.js";
 let sandboxRoot: string;
 
 beforeEach(async () => {
-	sandboxRoot = await mkdtemp(join(testParent, "pi-sandbox-reaper-test-"));
+	sandboxRoot = await mkdtemp(join(realTmpdir.value, "pi-sandbox-reaper-test-"));
 	mockedTmpdir.value = sandboxRoot;
 });
 
