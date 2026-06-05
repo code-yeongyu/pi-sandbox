@@ -59,14 +59,14 @@
 		"zod": "latest"
 	},
 	"devDependencies": {
-		"@biomejs/biome": "2.4.15",
+		"@biomejs/biome": "2.4.16",
 		"@types/dockerode": "latest",
 		"@types/node": "latest",
 		"@types/ssh2": "latest",
 		"@typescript/native-preview": "latest",
 		"expect-type": "latest",
 		"typescript": "^6.0.3",
-		"vitest": "^4.1.6",
+		"vitest": "^4.1.8",
 		"zod-to-json-schema": "latest"
 	},
 	"engines": {
